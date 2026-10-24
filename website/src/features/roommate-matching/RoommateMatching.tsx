@@ -46,7 +46,7 @@ const money = (value: number) => new Intl.NumberFormat('en-US', {
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
   const [state, dispatch] = useReducer(discoveryReducer, initialDiscoveryState)
   const [city, setCity] = useState('All cities')
-  const [maxBudget, setMaxBudget] = useState(2000)
+  const [maxBudget, setMaxBudget] = useState(1300)
   const [moveInBy, setMoveInBy] = useState('')
   const [housingType, setHousingType] = useState('Any housing')
   const [roommateDynamic, setRoommateDynamic] = useState('Any dynamic')
@@ -178,7 +178,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   return <main className="roommate-matching">
     <header className="rm-header">
       <div><span className="rm-mark" aria-hidden="true">⌂</span><strong>ROOMROOT</strong></div>
-      <p>Roommate discovery <span>· fictional hackathon profiles</span></p>
+      <p>Hokie roommate discovery <span>· fictional demo profiles</span></p>
     </header>
 
     <section className="rm-shell">
@@ -186,7 +186,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         <p className="rm-kicker">REFINE YOUR DECK</p>
         <h2>Find your rhythm.</h2>
         <label>City<select value={city} onChange={event => updateFilter(() => setCity(event.target.value))}>{cities.map(value => <option key={value}>{value}</option>)}</select></label>
-        <label>Maximum rent <strong>{money(maxBudget)}</strong><input type="range" min="700" max="2500" step="50" value={maxBudget} onChange={event => updateFilter(() => setMaxBudget(Number(event.target.value)))} /></label>
+        <label>Maximum rent <strong>{money(maxBudget)}</strong><input type="range" min="500" max="2000" step="50" value={maxBudget} onChange={event => updateFilter(() => setMaxBudget(Number(event.target.value)))} /></label>
         <label>Move in by<input type="date" value={moveInBy} onChange={event => updateFilter(() => setMoveInBy(event.target.value))} /></label>
         <label>Housing preference<select value={housingType} onChange={event => updateFilter(() => setHousingType(event.target.value))}>{housingTypes.map(value => <option key={value}>{value}</option>)}</select></label>
         <details className="rm-more-filters"><summary>More compatibility filters</summary>
