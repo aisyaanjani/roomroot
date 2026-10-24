@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { calculateDeterministicMatch, validateAiAnalysis, validateProfiles } from '../matchingEngine.js';
+import { buildPrompt, calculateDeterministicMatch, validateAiAnalysis, validateProfiles } from '../matchingEngine.js';
 
 const compatibleSeeker = {
   monthlyBudget: 1000,
@@ -58,14 +58,21 @@ test('rejects missing and invalid profiles', () => {
 test('validates and strips unexpected AI response values', () => {
   const result = validateAiAnalysis({
     summary: 'A cautious summary.',
-    strengths: ['Shared quiet hours.', 42],
+    strengths: ['Shared quiet hours.'],
     conflicts: [],
-    questions: ['Discuss guests?'],
-    missingInformation: ['Pet policy.'],
-    compatibilityScore: 100
+    questions: ['Discuss guests?']
   });
   assert.deepEqual(result.strengths, ['Shared quiet hours.']);
   assert.equal('compatibilityScore' in result, false);
+});
+
+test('rejects unsupported AI keys and oversized lists', () => {
+  assert.throws(() => validateAiAnalysis({
+    summary: 'Summary.', strengths: [], conflicts: [], questions: [], score: 90
+  }), /unsupported JSON keys/);
+  assert.throws(() => validateAiAnalysis({
+    summary: 'Summary.', strengths: ['1', '2', '3', '4'], conflicts: [], questions: []
+  }), /invalid strengths list/);
 });
 
 test('importance weights change the score without becoming dealbreakers', () => {
@@ -129,4 +136,24 @@ test('ambiguous and missing answers require discussion without automatic rejecti
   assert.ok(result.discussionItems.some(item => item.includes('smoking location')));
   assert.ok(result.discussionItems.some(item => item.includes('notice expectations')));
   assert.ok(result.missingInformation.some(item => item.includes('Noise preference')));
+});
+
+test('AI prompt includes only compact lifestyle evidence', () => {
+  const seeker = {
+    monthlyBudget: 1400,
+    sleepSchedule: 'Early bird',
+    noisePreference: 'Quiet',
+    privateNote: 'must never enter the prompt'
+  };
+  const host = {
+    monthlyRent: 1100,
+    sleepSchedule: 'Night owl',
+    noisePreference: 'Quiet'
+  };
+  const deterministic = calculateDeterministicMatch(seeker, host);
+  const prompt = buildPrompt(seeker, host, deterministic);
+  assert.match(prompt, /Early bird/);
+  assert.match(prompt, /Night owl/);
+  assert.doesNotMatch(prompt, /monthlyBudget|monthlyRent|privateNote/);
+  assert.ok(prompt.length < 2500);
 });

@@ -38,6 +38,18 @@ function deterministicResponse(deterministic) {
 async function generateGemmaAnalysis(prompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
+  const startedAt = performance.now();
+  const requestPayload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.2,
+      maxOutputTokens: 400,
+      thinkingConfig: {
+        thinkingLevel: 'minimal'
+      }
+    }
+  };
 
   try {
     const response = await fetch(
@@ -48,13 +60,7 @@ async function generateGemmaAnalysis(prompt) {
           'Content-Type': 'application/json',
           'x-goog-api-key': process.env.GEMINI_API_KEY
         },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 1200
-          }
-        }),
+        body: JSON.stringify(requestPayload),
         signal: controller.signal
       }
     );
@@ -68,9 +74,25 @@ async function generateGemmaAnalysis(prompt) {
     }
 
     const text = body?.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || '')
+      ?.filter((part) => part.thought !== true)
+      .map((part) => part.text || '')
       .join('');
     if (!text) throw new Error('Gemma returned no text content.');
+    if (process.env.GEMMA_DIAGNOSTICS === '1') {
+      const candidate = body?.candidates?.[0];
+      const usage = body?.usageMetadata || {};
+      console.info('Gemma request metrics:', JSON.stringify({
+        durationSeconds: Number(((performance.now() - startedAt) / 1000).toFixed(3)),
+        requestBytes: Buffer.byteLength(JSON.stringify(requestPayload)),
+        responseBytes: Buffer.byteLength(JSON.stringify(body)),
+        promptTokenCount: usage.promptTokenCount ?? null,
+        candidatesTokenCount: usage.candidatesTokenCount ?? null,
+        thoughtsTokenCount: usage.thoughtsTokenCount ?? null,
+        totalTokenCount: usage.totalTokenCount ?? null,
+        finishReason: candidate?.finishReason ?? null,
+        thoughtPartCount: candidate?.content?.parts?.filter((part) => part.thought === true).length ?? 0
+      }));
+    }
     return text;
   } finally {
     clearTimeout(timeout);
@@ -78,8 +100,14 @@ async function generateGemmaAnalysis(prompt) {
 }
 
 function parseGemmaJson(text) {
-  const fencedJson = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate = fencedJson || text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const withoutThoughts = text
+    .replace(/<\|channel\>thought[\s\S]*?<\|channel\>(?:final)?/gi, '')
+    .replace(/<\|think\|>[\s\S]*?<\|\/think\|>/gi, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
+  const fencedJson = withoutThoughts.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const source = fencedJson || withoutThoughts;
+  const candidate = source.slice(source.indexOf('{'), source.lastIndexOf('}') + 1);
   if (!candidate) throw new Error('Gemma did not return a JSON object.');
   return JSON.parse(candidate);
 }
@@ -133,17 +161,22 @@ app.post('/api/match', async (req, res) => {
     const unavailableModel =
       error.status === 404 || /not found|not supported|model unavailable/i.test(error.message);
     const timedOut = error.name === 'AbortError' || error.name === 'TimeoutError';
+    const invalidResponse = /JSON object|JSON|no text content/i.test(error.message);
     res.status(503).json({
       error: unavailableModel
         ? `The configured model (${model}) is unavailable for this API key.`
         : timedOut
           ? 'The Gemma request timed out after 20 seconds.'
-          : 'Compatibility analysis is temporarily unavailable.',
+          : invalidResponse
+            ? 'Gemma returned an invalid compatibility explanation.'
+            : 'Compatibility analysis is temporarily unavailable.',
       code: unavailableModel
         ? 'MODEL_UNAVAILABLE'
         : timedOut
           ? 'AI_REQUEST_TIMEOUT'
-          : 'AI_REQUEST_FAILED'
+          : invalidResponse
+            ? 'AI_RESPONSE_INVALID'
+            : 'AI_REQUEST_FAILED'
     });
   }
 });
