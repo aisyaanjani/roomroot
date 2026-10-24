@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" fill="none">
+  <defs>
+    <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#F1EEE4"/><stop offset="1" stop-color="#E4E8DE"/></linearGradient>
+    <linearGradient id="glass" x1="371" y1="28" x2="510" y2="147" gradientUnits="userSpaceOnUse"><stop stop-color="#D6E4DD"/><stop offset=".52" stop-color="#F4E5C8"/><stop offset="1" stop-color="#AFC3B2"/></linearGradient>
+    <linearGradient id="floor" x1="0" y1="207" x2="0" y2="280" gradientUnits="userSpaceOnUse"><stop stop-color="#CBB38F"/><stop offset="1" stop-color="#A98C68"/></linearGradient>
+    <linearGradient id="chair" x1="107" y1="127" x2="246" y2="221" gradientUnits="userSpaceOnUse"><stop stop-color="#87927A"/><stop offset="1" stop-color="#687B65"/></linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(-198 159 -128 -159 479 68)" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF4D4" stop-opacity=".65"/><stop offset="1" stop-color="#FFF4D4" stop-opacity="0"/></radialGradient>
+    <pattern id="grain" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M0 29.5h30" stroke="#625A4A" stroke-opacity=".04"/></pattern>
+  </defs>
+  <path fill="url(#wall)" d="M0 0h600v208H0z"/><path fill="url(#floor)" d="M0 208h600v72H0z"/><path fill="url(#glow)" d="M0 0h600v208H0z"/>
+  <path fill="#F8F3E7" stroke="#AC9B82" stroke-width="5" d="M361 26h149v132H361z"/><path fill="url(#glass)" d="M369 34h133v116H369z"/><path stroke="#F8F3E7" stroke-width="5" d="M435.5 34v116M369 91h133"/><path fill="#A8B69B" fill-opacity=".56" d="M369 119c21-20 38-15 57 1 20-23 45-21 76 0v30H369z"/>
+  <path fill="#B4946E" d="M52 48h85v98H52z"/><path fill="#F5F0E3" d="M59 55h71v84H59z"/><path stroke="#B4946E" stroke-width="3" d="M59 82h71m-71 28h71"/><path fill="#72836B" d="M64 72h24v8H64zm36 0h27v8h-27zm-36 29h32v8H64zm42 0h21v8h-21z"/><path fill="#B99870" d="M62 128h65v8H62z"/>
+  <ellipse cx="179" cy="231" rx="99" ry="12" fill="#574D3D" fill-opacity=".13"/><path fill="#5E6E5E" d="M91 157c0-17 14-31 31-31h66c17 0 31 14 31 31v32H91z"/><path fill="url(#chair)" d="M103 136c0-12 10-22 22-22h53c12 0 22 10 22 22v45h-97z"/><path fill="#D6C2A4" d="M117 130h34v31h-34z"/><path fill="#A6AE95" d="M156 130h30v31h-30z"/><path stroke="#554F42" stroke-width="6" d="m111 184-10 34m97-34 11 34"/>
+  <path fill="#9E7C57" d="M253 178h82l-7 10h-68z"/><path stroke="#886B4C" stroke-width="4" d="m267 188-4 31m51-31 5 31"/><path fill="#EEE4D1" d="M279 151h23v27h-23z"/><path fill="#9DA88D" d="M282 146c-5-11 1-21 7-26 9 8 9 17-2 27m7 0c-1-12 5-20 14-22 3 10-1 17-14 22"/>
+  <path stroke="#806B51" stroke-width="3" d="M559 161v48"/><path fill="#D3B885" d="M540 160c0-14 9-23 19-23s19 9 19 23z"/><path fill="#9A805F" d="M549 207h20l8 8h-36z"/>
+  <path fill="url(#grain)" d="M0 0h600v280H0z"/>
+</svg>

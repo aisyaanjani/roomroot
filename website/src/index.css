@@ -15,3 +15,8 @@ body { margin: 0; }
 h1, h2, h3 { color: inherit; }
 button, input, select { font: inherit; }
 a:focus-visible, button:focus-visible { outline: 3px solid #739a75; outline-offset: 3px; }
+
+html { scroll-padding-top: 2rem; }
+body { min-width: 0; }
+#root { width: 100%; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
