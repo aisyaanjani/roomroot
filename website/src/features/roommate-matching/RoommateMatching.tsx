@@ -52,6 +52,25 @@ const priorityLabel = (weight: number) => {
 
 const answerLabel = (value: unknown) => Array.isArray(value) ? value.join(', ') : String(value ?? 'Not answered')
 
+const logisticsFields = new Set(['monthly housing budget', 'monthly housing cost', 'lease duration', 'location', 'move-in date', 'housing type'])
+
+function domainScore(items: MatchResult['breakdown'], logistics: boolean) {
+  const selected = items.filter(item => logisticsFields.has(item.field) === logistics)
+  const matched = selected.filter(item => item.matches).length
+  return { matched, total: selected.length, percent: selected.length ? Math.round((matched / selected.length) * 100) : 0 }
+}
+
+function fallbackQuestions(items: MatchResult['breakdown']) {
+  const mismatches = new Set(items.filter(item => !item.matches).map(item => item.field))
+  const questions: string[] = []
+  if (mismatches.has('sleep schedule') || mismatches.has('noise preference')) questions.push('What quiet hours work on weeknights, during exams, and on game weekends?')
+  if (mismatches.has('cleanliness') || mismatches.has('cleaning expectations')) questions.push('How should we split kitchen and bathroom chores, and how often should they be done?')
+  if (mismatches.has('guest frequency') || mismatches.has('overnight guests')) questions.push('How much notice should we give for visitors, and what overnight-guest boundaries feel fair?')
+  if (mismatches.has('shared groceries')) questions.push('Which groceries and household supplies, if any, should we share?')
+  if (mismatches.has('communication style')) questions.push('How should we bring up a problem before it turns into resentment?')
+  return [...questions, 'What should we put in writing before signing a lease?'].slice(0, 3)
+}
+
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
   const [state, dispatch] = useReducer(discoveryReducer, initialDiscoveryState)
   const [city, setCity] = useState('All cities')
@@ -61,11 +80,15 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [roommateDynamic, setRoommateDynamic] = useState('Any dynamic')
   const [householdRhythm, setHouseholdRhythm] = useState('Any rhythm')
   const [sharedMeals, setSharedMeals] = useState('Any meal style')
-  const [homeLanguage, setHomeLanguage] = useState('Any language')
   const [kitchenStyle, setKitchenStyle] = useState('Any kitchen')
   const [guestFrequency, setGuestFrequency] = useState('Any guest frequency')
   const [smokeFree, setSmokeFree] = useState(false)
   const [petPreference, setPetPreference] = useState('Any pet preference')
+  const [searchMode, setSearchMode] = useState('Any search mode')
+  const [occupancyCap, setOccupancyCap] = useState('Any household size')
+  const [transitCorridor, setTransitCorridor] = useState('Any commute corridor')
+  const [academicTerm, setAcademicTerm] = useState('Any lease term')
+  const [privateBathroom, setPrivateBathroom] = useState(false)
   const [deterministic, setDeterministic] = useState<Record<string, MatchResult>>({})
   const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<Record<string, AiState>>({})
@@ -75,7 +98,6 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
 
   const cities = useMemo(() => ['All cities', ...new Set(profiles.map(item => item.profile.housingBasics.city))], [profiles])
   const housingTypes = useMemo(() => ['Any housing', ...new Set(profiles.flatMap(item => item.profile.propertyPreferences.housingTypes))], [profiles])
-  const homeLanguages = useMemo(() => ['Any language', ...new Set(profiles.flatMap(item => item.matchProfile.homeLanguages))], [profiles])
   const filtered = useMemo(() => profiles.filter(item => {
     const basics = item.profile.housingBasics
     const lifestyle = item.profile.lifestyle
@@ -83,15 +105,19 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
       && basics.minRent <= maxBudget
       && (!moveInBy || !basics.moveInDate || basics.moveInDate <= moveInBy)
       && (housingType === 'Any housing' || item.profile.propertyPreferences.housingTypes.includes(housingType))
+      && (searchMode === 'Any search mode' || item.matchProfile.searchMode === searchMode)
+      && (occupancyCap === 'Any household size' || item.matchProfile.occupancyCap === Number(occupancyCap))
+      && (transitCorridor === 'Any commute corridor' || item.matchProfile.transitCorridor === transitCorridor)
+      && (academicTerm === 'Any lease term' || item.matchProfile.academicTerm === academicTerm)
+      && (!privateBathroom || item.matchProfile.privateBathroom)
       && (roommateDynamic === 'Any dynamic' || item.matchProfile.roommateDynamic === roommateDynamic)
       && (householdRhythm === 'Any rhythm' || item.matchProfile.householdRhythm === householdRhythm)
       && (sharedMeals === 'Any meal style' || item.matchProfile.sharedMeals === sharedMeals)
-      && (homeLanguage === 'Any language' || item.matchProfile.homeLanguages.includes(homeLanguage))
       && (kitchenStyle === 'Any kitchen' || item.matchProfile.kitchenStyle === kitchenStyle)
       && (guestFrequency === 'Any guest frequency' || lifestyle.guests === guestFrequency)
       && (!smokeFree || lifestyle.smoking === 'Prefer smoke-free home' || lifestyle.smoking === 'Non-smoker')
       && (petPreference === 'Any pet preference' || lifestyle.pets === petPreference)
-  }), [city, guestFrequency, homeLanguage, householdRhythm, housingType, kitchenStyle, maxBudget, moveInBy, petPreference, profiles, roommateDynamic, sharedMeals, smokeFree])
+  }), [academicTerm, city, guestFrequency, householdRhythm, housingType, kitchenStyle, maxBudget, moveInBy, occupancyCap, petPreference, privateBathroom, profiles, roommateDynamic, searchMode, sharedMeals, smokeFree, transitCorridor])
 
   const candidate = filtered[state.currentIndex]
   const result = candidate ? deterministic[candidate.id] : undefined
@@ -153,13 +179,19 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   useEffect(() => {
     if (!candidate || !result || aiState) return
     const cached = readCachedInsights(aiCacheKey(candidate.id, currentProfile))
+    if (!cached) return
     const target = candidate
-    const timer = window.setTimeout(() => void requestAiInsights(target), cached ? 0 : 450)
+    const timer = window.setTimeout(() => void requestAiInsights(target), 0)
     return () => window.clearTimeout(timer)
   }, [aiState, candidate, currentProfile, requestAiInsights, result])
 
   function resetDeck() { dispatch({ type: 'reset' }) }
   function updateFilter(update: () => void) { update(); dispatch({ type: 'rewind' }) }
+  function saveCandidate() {
+    if (!candidate) return
+    dispatch({ type: 'save', id: candidate.id })
+    if (!aiState) void requestAiInsights(candidate)
+  }
   function swipe(action: 'pass' | 'like') {
     if (!candidate || swipeDirection) return
     setSwipeDirection(action === 'pass' ? 'left' : 'right')
@@ -198,16 +230,22 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         <label>Maximum rent <strong>{money(maxBudget)}</strong><input type="range" min="500" max="2000" step="50" value={maxBudget} onChange={event => updateFilter(() => setMaxBudget(Number(event.target.value)))} /></label>
         <label>Move in by<input type="date" value={moveInBy} onChange={event => updateFilter(() => setMoveInBy(event.target.value))} /></label>
         <label>Housing preference<select value={housingType} onChange={event => updateFilter(() => setHousingType(event.target.value))}>{housingTypes.map(value => <option key={value}>{value}</option>)}</select></label>
+        <div className="rm-structural-filters"><p className="rm-kicker">BLACKSBURG HOUSING FIT</p>
+          <label>What do you need?<select value={searchMode} onChange={event => updateFilter(() => setSearchMode(event.target.value))}>{['Any search mode','Has open room','Needs a room','Team up for a lease'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Total unrelated occupants<select value={occupancyCap} onChange={event => updateFilter(() => setOccupancyCap(event.target.value))}>{['Any household size','2','3','4'].map(value => <option key={value} value={value}>{value === 'Any household size' ? value : `${value} people`}</option>)}</select></label>
+          <label>Campus commute<select value={transitCorridor} onChange={event => updateFilter(() => setTransitCorridor(event.target.value))}>{['Any commute corridor','Walk or bike','Hethwood','Toms Creek / UCB','North Main','South Main','Christiansburg'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Lease cycle<select value={academicTerm} onChange={event => updateFilter(() => setAcademicTerm(event.target.value))}>{['Any lease term','Spring 2027','Fall 2027','Academic year','12-month lease','Sublet'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label className="rm-check"><input type="checkbox" checked={privateBathroom} onChange={event => updateFilter(() => setPrivateBathroom(event.target.checked))} /> Private bathroom required</label>
+        </div>
         <details className="rm-more-filters"><summary>More compatibility filters</summary>
           <label>Roommate dynamic<select value={roommateDynamic} onChange={event => updateFilter(() => setRoommateDynamic(event.target.value))}>{['Any dynamic','Friendly & communal','Independent','Study-focused','Balanced'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Household rhythm<select value={householdRhythm} onChange={event => updateFilter(() => setHouseholdRhythm(event.target.value))}>{['Any rhythm','Quiet & private','Social & communal','Balanced'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Shared meals<select value={sharedMeals} onChange={event => updateFilter(() => setSharedMeals(event.target.value))}>{['Any meal style','Often','Sometimes','Separate'].map(value => <option key={value}>{value}</option>)}</select></label>
-          <label>Language spoken at home<select value={homeLanguage} onChange={event => updateFilter(() => setHomeLanguage(event.target.value))}>{homeLanguages.map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Kitchen style<select value={kitchenStyle} onChange={event => updateFilter(() => setKitchenStyle(event.target.value))}>{['Any kitchen','Vegetarian-friendly','Allergy-aware','No restrictions'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Guests<select value={guestFrequency} onChange={event => updateFilter(() => setGuestFrequency(event.target.value))}>{['Any guest frequency','Rarely','Occasionally','Frequently'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Pets<select value={petPreference} onChange={event => updateFilter(() => setPetPreference(event.target.value))}>{['Any pet preference','Have pets','Comfortable with pets','Prefer no pets'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label className="rm-check"><input type="checkbox" checked={smokeFree} onChange={event => updateFilter(() => setSmokeFree(event.target.checked))} /> Smoke-free household</label>
-          <p className="rm-filter-note">Identity details are never used to rank or exclude housing matches.</p>
+          <p className="rm-filter-note">Languages and cultural notes stay optional profile context—they never exclude or rank housing matches.</p>
         </details>
         <div className="rm-stats"><span><strong>{state.liked.length}</strong> liked</span><span><strong>{state.saved.length}</strong> saved</span></div>
       </aside>
@@ -239,31 +277,32 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
                 <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
+                <section className="rm-domain-scores" aria-label="Compatibility score breakdown">{([['Lease & logistics', domainScore(result.breakdown, true)], ['Daily living rhythm', domainScore(result.breakdown, false)]] as const).map(([label, score]) => <div key={label}><div><strong>{label}</strong><span>{score.matched}/{score.total} aligned · {score.percent}%</span></div><progress max="100" value={score.percent}>{score.percent}%</progress></div>)}</section>
                 <details className="rm-score-explainer" open><summary>How RoomRoot calculated {result.compatibilityScore === null ? 'this match' : `${result.compatibilityScore}%`}</summary><ol><li><strong>Check must-haves.</strong> Budget, dates, lease needs, and stated dealbreakers come first.</li><li><strong>Compare shared answers.</strong> RoomRoot checks lifestyle and housing expectations both people answered.</li><li><strong>Respect your priorities.</strong> Cleanliness or quiet matters more when you marked it as important.</li><li><strong>Calculate the score.</strong> Aligned priority points ÷ all comparable priority points. AI does not set or change the percentage.</li></ol></details>
+                {!!result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).length && <section className="rm-mirror"><div className="rm-mirror-title"><div><p className="rm-kicker">EXPECTATION MIRROR</p><h3>Routines to coordinate</h3></div><span>Discuss first</span></div><p>Important differences, shown once and side by side.</p><div className="rm-mirror-grid">{result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).map(item => <article key={item.field}><strong>{item.field}</strong><div><span>You</span><b>{answerLabel(item.seekerValue)}</b></div><div><span>{candidate.name.split(' ')[0]}</span><b>{answerLabel(item.hostValue)}</b></div><small>{priorityLabel(item.weight)} for this match</small></article>)}</div></section>}
                 <section className="rm-ai">
-                  <div className="rm-ai-heading"><div><p className="rm-kicker">SMART MATCH NOTES</p><h3>AI flagged these</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
-                  {!aiState && <div className="rm-ai-skeleton" aria-hidden="true"><span /><span /><span /></div>}
-                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Checking for possible roommate friction…</div>}
-                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are briefly busy.</strong><p>Your core match and expectation mirror still work without AI. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Try free AI again</button></div>}
+                  <div className="rm-ai-heading"><div><p className="rm-kicker">LIVING TOGETHER GUIDE · POWERED BY GEMMA</p><h3>How routines fit & what to ask before leasing</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
+                  {!aiState && <div className="rm-guide-prompt"><p>Want a custom breakdown and three questions to ask {candidate.name.split(' ')[0]}?</p><button type="button" onClick={() => void requestAiInsights(candidate)}>Generate match guide</button></div>}
+                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Building your living-together guide…</div>}
+                  {aiState?.status === 'unavailable' && <><div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{fallbackQuestions(result.breakdown).map(item => <li key={item}>{item}</li>)}</ul></div><button className="rm-refresh-link" type="button" onClick={() => void requestAiInsights(candidate)}>↻ Refresh custom guide</button></>}
                   {aiState?.status === 'success' && aiState.result && <>
                     <p className="rm-ai-summary">{aiState.result.summary}</p>
                     <div className="rm-ai-columns">
-                      {!!aiState.result.strengths.length && <div className="rm-ai-positive"><h4>✓ Looks aligned</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Possible roommate conflict</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                      {!!aiState.result.strengths.length && <div className="rm-ai-positive"><h4>✓ Shared ground</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Routines to coordinate</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
                     </div>
-                    {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>Ask before you commit</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                    <details className="rm-ai-disclosure"><summary>What AI does here</summary><p>AI translates the comparison into plain-language risks and conversation prompts. It does not rate people, change the score, verify identity, or certify safety.</p></details>
+                    {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                    <details className="rm-ai-disclosure"><summary>What Gemma does here</summary><p>Gemma translates the comparison into conversation prompts. It does not rate people, change the score, verify identity, or certify safety.</p></details>
                   </>}
                 </section>
-                {!!result.breakdown.filter(item => !item.matches && item.seekerValue !== undefined && item.hostValue !== undefined).length && <section className="rm-mirror"><div className="rm-mirror-title"><div><p className="rm-kicker">EXPECTATION MIRROR</p><h3>Where daily life may feel different</h3></div><span>Possible friction</span></div><p>See the exact expectations side by side before you decide.</p><div className="rm-mirror-grid">{result.breakdown.filter(item => !item.matches && item.seekerValue !== undefined && item.hostValue !== undefined).slice(0, 4).map(item => <article key={item.field}><strong>{item.field}</strong><div><span>You</span><b>{answerLabel(item.seekerValue)}</b></div><div><span>{candidate.name.split(' ')[0]}</span><b>{answerLabel(item.hostValue)}</b></div><small>{priorityLabel(item.weight)} for this match</small></article>)}</div></section>}
-                <section><h3>Why this score</h3><p className="rm-breakdown-help">Priorities you care about more have a bigger effect on compatibility.</p><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>{item.matches ? 'Aligned' : 'Different'} · {priorityLabel(item.weight)}</small></div></div>)}</div></section>
+                <details className="rm-aligned"><summary>See all aligned traits ({result.breakdown.filter(item => item.matches).length})</summary><div className="rm-aligned-chips">{result.breakdown.filter(item => item.matches).map(item => <span key={item.field}>✓ {item.field}</span>)}</div></details>
                 {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
               </>}
             </div>
             <footer className="rm-actions">
               <button className="rm-pass" type="button" onClick={() => swipe('pass')}>✕ Pass</button>
-              <button className="rm-save" type="button" aria-pressed={state.saved.includes(candidate.id)} onClick={() => dispatch({ type: 'save', id: candidate.id })}>☆ {state.saved.includes(candidate.id) ? 'Saved' : 'Save'}</button>
+              <button className="rm-save" type="button" aria-pressed={state.saved.includes(candidate.id)} onClick={saveCandidate}>☆ {state.saved.includes(candidate.id) ? 'Saved' : 'Save'}</button>
               <button className="rm-like" type="button" onClick={() => swipe('like')}>♡ Like</button>
             </footer>
           </article>}
