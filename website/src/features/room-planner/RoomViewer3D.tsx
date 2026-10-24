@@ -1,13 +1,14 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentRef, ReactNode } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei/core/OrbitControls'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 import type { Layout } from './model'
 import { Architecture3D } from './Architecture3D'
 import { collisions } from './model'
 import type { DragActions } from './useFurnitureDrag'
 import { Furniture3D } from './Furniture3D'
+import { cameraFit } from './cameraFit'
 
 function Unavailable(){return <div className="rs-3d-unavailable" role="status"><strong>3D isn’t available right now.</strong><p>Your layout is safe. Switch to 2D to keep planning, or reload to try 3D again.</p></div>}
 class ViewerBoundary extends Component<{children:ReactNode},{failed:boolean}>{
@@ -23,10 +24,9 @@ function Camera({layout,reset}:{layout:Layout;reset:number}){
   const radius=Math.hypot(width,length,height)/2
   useLayoutEffect(()=>{
     if(!(camera instanceof PerspectiveCamera)||!controls.current)return
-    const halfFov=Math.min(MathUtils.degToRad(camera.fov/2),Math.atan(Math.tan(MathUtils.degToRad(camera.fov/2))*size.width/size.height))
-    const distance=radius/Math.sin(halfFov)*1.12
-    const target=new Vector3(width/2,height*.28,length/2)
-    camera.position.copy(target).add(new Vector3(1,.95,1).normalize().multiplyScalar(distance))
+    const framing=cameraFit(width,length,height,size.width/size.height,camera.fov)
+    const distance=framing.distance,target=new Vector3(...framing.target)
+    camera.position.set(...framing.position)
     // OrbitControls and Three cameras require imperative updates outside React rendering.
     // oxlint-disable-next-line react/immutability
     camera.near=.1;camera.far=Math.max(500,distance*5);camera.updateProjectionMatrix()
@@ -49,7 +49,7 @@ export default function RoomViewer3D({layout,selected,onSelect,...actions}:{layo
   const [reset,setReset]=useState(0)
   const [failed,setFailed]=useState(false)
   const width=layout.room.width,length=layout.room.length
-  const overlaps=collisions(layout.furniture)
+  const overlaps=useMemo(()=>collisions(layout.furniture),[layout.furniture])
   const extent=Math.max(width,length,8,...layout.furniture.map(f=>f.height))
   return <div className="rs-viewer-3d" aria-label="Interactive 3D room viewer">
     {failed?<Unavailable/>:<ViewerBoundary><Canvas shadows dpr={[1,1.5]} frameloop="demand" camera={{fov:45,position:[24,24,24]}} fallback={<Unavailable/>} onPointerMissed={event=>{if(event.type==='click'&&event.target instanceof HTMLCanvasElement)onSelect(null)}}>
@@ -57,10 +57,11 @@ export default function RoomViewer3D({layout,selected,onSelect,...actions}:{layo
       <color attach="background" args={['#eef0e7']}/>
       <hemisphereLight args={['#fff8e8','#a7b39c',2]}/>
       <directionalLight position={[width*.3,extent*1.7,length*.7]} intensity={3} castShadow shadow-mapSize={[1024,1024]} shadow-camera-left={-extent} shadow-camera-right={extent} shadow-camera-top={extent} shadow-camera-bottom={-extent} shadow-camera-far={extent*5} shadow-normalBias={.04}/>
-      <Architecture3D layout={layout}/>
+      <Architecture3D room={layout.room} openings={layout.openings} appearance={layout.appearance}/>
       {layout.furniture.map(item=><Furniture3D key={item.id} item={item} {...actions} overlapping={overlaps.has(item.id)} selected={selected===item.id} onSelect={onSelect}/>)}
       <Camera layout={layout} reset={reset}/>
     </Canvas></ViewerBoundary>}
-    <div className="rs-toolbar"><button onClick={()=>setReset(v=>v+1)} disabled={failed}>↺ Reset Camera</button></div>
+    {layout.furniture.length===0&&<div className="rs-3d-empty"><strong>A new perspective on your space.</strong><span>Add a piece from the library, then drag it into place.</span></div>}
+    <div className="rs-toolbar"><button title="Fit the whole room to this workspace" onClick={()=>setReset(v=>v+1)} disabled={failed}>↺ Reset Camera</button></div>
   </div>
 }

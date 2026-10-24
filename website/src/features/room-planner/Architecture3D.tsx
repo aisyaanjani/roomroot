@@ -1,8 +1,9 @@
-import { useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Color, Group } from 'three'
 import { DEFAULT_APPEARANCE, wallLength } from './model'
 import type { Layout, Opening, Wall } from './model'
+import { surfaceTexture } from './surfaceTexture'
 
 function WallBlock({x,y,width,height,color}:{x:number;y:number;width:number;height:number;color:string}){
   if(width<=0||height<=0)return null
@@ -35,14 +36,21 @@ function WallGeometry({layout,wall}:{layout:Layout;wall:Wall}){
     {openings.map(o=><group key={o.id}><WallBlock x={o.position+o.width/2} y={o.sill/2} width={o.width} height={o.sill} color={color}/><WallBlock x={o.position+o.width/2} y={(8+o.sill+o.height)/2} width={o.width} height={8-o.sill-o.height} color={color}/><OpeningModel opening={o}/></group>)}
   </group>
 }
-export function Architecture3D({layout}:{layout:Layout}){
-  const {width,length}=layout.room
-  const {floorColor,floorMaterial}=layout.appearance??DEFAULT_APPEARANCE
+export const Architecture3D=memo(function Architecture3D({room,openings,appearance}:{room:Layout['room'];openings:Layout['openings'];appearance:Layout['appearance']}){
+  const layout=useMemo(()=>({version:1 as const,room,openings,appearance,furniture:[]}),[room,openings,appearance])
+  const {width,length}=room
+  const {floorColor,floorMaterial}=appearance??DEFAULT_APPEARANCE
+  const texture=useMemo(()=>{
+    if(floorMaterial==='plain')return null
+    const map=surfaceTexture(floorMaterial)
+    map.repeat.set(floorMaterial==='tile'?width/2:1,floorMaterial==='tile'?length/2:length/4)
+    return map
+  },[floorMaterial,width,length])
+  useEffect(()=>()=>texture?.dispose(),[texture])
   const plank=(i:number)=>'#'+new Color(floorColor).multiplyScalar([1.03,.97,1][i%3]!).getHexString()
   return <>
-    <mesh name="room-floor" position={[width/2,-.12,length/2]} receiveShadow><boxGeometry args={[width,.24,length]}/><meshStandardMaterial color={floorColor} roughness={.85}/></mesh>
-    {floorMaterial==='wood'&&Array.from({length:Math.ceil(width/.65)},(_,i)=><mesh key={i} position={[i*.65+Math.min(.65,width-i*.65)/2,.002,length/2]} rotation={[-Math.PI/2,0,0]} receiveShadow><planeGeometry args={[Math.min(.64,width-i*.65),length]}/><meshStandardMaterial color={plank(i)} roughness={.88}/></mesh>)}
-    {floorMaterial==='tile'&&<>{Array.from({length:Math.ceil(width/2)-1},(_,i)=><mesh key={'x'+i} position={[(i+1)*2,.003,length/2]}><boxGeometry args={[.025,.005,length]}/><meshStandardMaterial color="#aca99a"/></mesh>)}{Array.from({length:Math.ceil(length/2)-1},(_,i)=><mesh key={'z'+i} position={[width/2,.003,(i+1)*2]}><boxGeometry args={[width,.005,.025]}/><meshStandardMaterial color="#aca99a"/></mesh>)}</>}
+    <mesh name="room-floor" position={[width/2,-.12,length/2]} receiveShadow><boxGeometry args={[width,.24,length]}/><meshStandardMaterial color={floorColor} map={floorMaterial==='tile'?texture:null} roughness={floorMaterial==='plain'?.95:.72}/></mesh>
+    {floorMaterial==='wood'&&Array.from({length:Math.ceil(width/.65)},(_,i)=><mesh key={i} position={[i*.65+Math.min(.65,width-i*.65)/2,.002,length/2]} rotation={[-Math.PI/2,0,0]} receiveShadow><planeGeometry args={[Math.min(.64,width-i*.65),length]}/><meshStandardMaterial color={plank(i)} map={texture} roughness={.75}/></mesh>)}
     {(['north','south','east','west'] as const).map(wall=><WallGeometry key={wall} wall={wall} layout={layout}/>)}
   </>
-}
+})

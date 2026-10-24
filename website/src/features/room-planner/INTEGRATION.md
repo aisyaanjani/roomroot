@@ -1,4 +1,4 @@
-# RootSpace · Stages 1–3
+# RootSpace · Stages 1–4
 
 The feature is isolated to this folder. No shared application entry points change.
 
@@ -166,3 +166,82 @@ quadrants, wall clamping, camera locking/release/cancellation, one-step drag und
 view switching, saved restoration, mobile layout, and touch dragging. The existing
 Stage 2 camera test now orbits from empty space, because furniture now captures
 left-button dragging by design. All tests use an isolated browser profile.
+
+
+## Stage 4: visual polish and practical measurements
+
+`cameraFit.ts` replaces the bounding sphere with perspective constraints for all
+room-envelope corners, including a 0.25 ft margin for walls and trim. It fits the
+horizontal and vertical frusta, centers the projected bounds, and keeps the camera
+target inside the room. The camera reserves 12% horizontal and 18% vertical margin
+for controls. Reset, room/height changes, and viewport changes share this fit.
+The data model and storage key do not change.
+
+Furniture has layered mattresses and bedding, tonal sofa cushions, five chair
+spokes/casters and arms, recessed storage fronts/handles, aprons and drawer detail,
+and varied books on visible shelves. Detail geometry stays inside the stored unit
+box before feet-based scaling. The ten-model test scene uses about 1,930 triangles;
+these are stylized procedural models, not downloaded photorealistic assets.
+Geometry JSX is memoized by type/color so dragging only changes transforms.
+Selection outlines use explicit box edges instead of triangular wireframes, and
+translucent floor highlighting keeps the selected footprint readable.
+
+`finishes.ts` defines six named wall colors and six floor colors, alongside the
+existing unrestricted color pickers. Swatches and material preview buttons are
+keyboard-accessible and report pressed state; the native material selector remains
+available. Wood uses alternating plank tones and a small procedural grain texture;
+tile uses a repeating grout/speckle texture at a 2 ft spacing; solid has a matte,
+untextured surface. `surfaceTexture.ts` creates local 64×64 RGBA maps (16 KiB raw)
+and releases GPU resources on replacement/unmount. No network assets or keys.
+`Architecture3D` is memoized using room, openings, and appearance props so furniture
+movement does not rerender the architecture.
+
+`SelectionMeasurements.tsx` shows width/depth/height plus perpendicular clearance to
+all four walls. `measurements.ts` derives these from the rotated footprint without
+changing saved data. Clearances do not account for other furniture or door swings.
+`PlanMeasurements.tsx` adds screen-sized selected-footprint dimensions in 2D; the
+workspace footer shows actual furniture dimensions in both views. Room dimensions
+and area stay visible in the workspace header. Labels round to 0.01 ft; stored
+measurements retain full precision.
+
+Panel spacing, contrast, focus states, hover states, touch targets, empty states,
+and control tooltips have been refined. Small screens retain stacked panels with
+larger action targets. Reduced-motion preferences disable decorative transitions.
+
+### Bundle investigation
+
+`konva.ts` uses ReactKonvaCore and explicitly registers Rect, Line, Text, and Circle.
+Unused shapes, filters, and Transformer are excluded. Register new shapes here if
+future code needs them. The 2D entry shrank from roughly 576 kB at Stage 3 to
+514 kB minified (about 159 kB gzip), despite the additional polish. OrbitControls
+uses Drei's focused entry; the 3D viewer remains a lazy-loaded chunk, roughly
+940 kB minified / 250 kB gzip. The module graph fell from 645 to about 362 modules.
+
+Inspect contributors with:
+
+`ROOTSPACE_ANALYZE=1 npx --no-install vite build --config src/features/room-planner/vite.preview.config.ts`
+
+The optional report prints the largest modules and does not create extra artifacts.
+React DOM/reconciler and Konva dominate 2D; Three's renderer/core and Fiber dominate
+3D. Reported per-module rendered sizes are before minification, not transfer sizes.
+Chunk-size warnings remain visible. Safe future opportunities include lazy-loading
+the entire planner when integrating the shared app, long-lived caching for vendor
+chunks, and gzip/Brotli delivery at hosting. Vendor chunk splitting can improve
+cache reuse but does not reduce total download size. A custom minimal Fiber root
+could reduce Three's registered constructors but would require separate rendering
+regression work; it is not part of this polish milestone.
+
+### Additional verification
+
+Run every earlier suite plus:
+
+- `node src/features/room-planner/tests/stage4-model-review.mjs`
+- `CHROME_URL=http://127.0.0.1:9224 VITE_URL=http://127.0.0.1:5175 node src/features/room-planner/tests/stage4-browser-review.mjs`
+
+The math suite projects every envelope corner for 72 combinations of room sizes,
+heights, and viewport aspects, verifies fitted occupancy, and checks clearances and
+texture size. Browser tests check actual cameras at 5×5, 5×40, 40×5, 40×40, and
+12×14 ft; keyboard swatches; preset undo/redo; all ten furniture bounds and triangle
+budget; all three finishes; dimensions; save restoration; and mobile framing.
+Existing browser tests inspect the same versioned Fiber module URL as the app,
+so Vite dependency optimization does not create a second diagnostic root store.

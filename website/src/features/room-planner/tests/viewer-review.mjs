@@ -27,14 +27,14 @@ assert.equal(await ev('!!document.querySelector(".rs-viewer-3d > .rs-3d-unavaila
 assert.match(await ev('document.querySelector(".rs-properties").textContent'),/Desk · Selected/)
 assert.deepEqual(await saved(),original)
 // Access Fiber's exported root store to inspect actual rendered transforms, not duplicate app state.
-await ev(`(async()=>{const fiber=await import('/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
+await ev(`(async()=>{const fiber=await import(performance.getEntriesByType('resource').find(e=>e.name.includes('/@react-three_fiber.js'))?.name??'/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
 const state=()=>ev(`(()=>{const s=window.reviewStore.getState();const f=s.scene.getObjectByName('furniture:${original.furniture[0].id}');return {position:f.position.toArray(),rotation:f.rotation.y,scale:f.children[0].scale.toArray(),camera:s.camera.position.toArray(),target:s.controls.target.toArray(),count:s.scene.children.filter(c=>c.name.startsWith('furniture:')).length}})()`)
 let rendered=await state();assert.deepEqual(rendered.position,[6,0,7]);assert.deepEqual(rendered.scale,[4,2.5,2]);const initialCamera=rendered.camera
 if(process.env.SCREENSHOT_PATH){const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(process.env.SCREENSHOT_PATH,Buffer.from(shot.data,'base64'))}
 // Clear selection, then raycast-select the tabletop through a real pointer click.
 await ev(`document.querySelector('.rs-piece-list button').click()`);await settle()
 await click('2D planner');await click('3D room');await new Promise(r=>setTimeout(r,500))
-await ev(`(async()=>{const fiber=await import('/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
+await ev(`(async()=>{const fiber=await import(performance.getEntriesByType('resource').find(e=>e.name.includes('/@react-three_fiber.js'))?.name??'/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
 await ev(`window.reviewStore.getState().events.handlers.onPointerMissed?.({type:'click'})`)
 // Clicking blank space clears selection, leaving the shared properties panel empty.
 let rect=await ev(`(()=>{const r=document.querySelector('.rs-viewer-3d canvas').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`)
@@ -44,7 +44,7 @@ await mouse('mousePressed',hit.x,hit.y);await mouse('mouseReleased',hit.x,hit.y)
 await fill('Furniture width',5);await fill('Furniture depth',3);await fill('Furniture height',3);await fill('Furniture color','#bb8866');await click('Rotate 90');rendered=await state();assert.deepEqual(rendered.scale,[5,3,3]);assert.ok(Math.abs(rendered.rotation+Math.PI/2)<1e-8)
 assert.equal(await ev(`window.reviewStore.getState().scene.getObjectByName('furniture:${original.furniture[0].id}').children[0].children.find(c=>c.isMesh&&c.geometry.parameters.width===1).material.color.getHexString()`),'bb8866')
 const edited=await saved();await click('2D planner');assert.deepEqual(await saved(),edited);assert.match(await ev('document.querySelector(".rs-properties").textContent'),/Desk · Selected/)
-await click('3D room');await new Promise(r=>setTimeout(r,500));await ev(`(async()=>{const fiber=await import('/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
+await click('3D room');await new Promise(r=>setTimeout(r,500));await ev(`(async()=>{const fiber=await import(performance.getEntriesByType('resource').find(e=>e.name.includes('/@react-three_fiber.js'))?.name??'/node_modules/.vite/deps/@react-three_fiber.js');window.reviewStore=fiber._roots.get(document.querySelector('.rs-viewer-3d canvas')).store})()`)
 rect=await ev(`(()=>{const r=document.querySelector('.rs-viewer-3d canvas').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`)
 let before=(await state()).camera
 // Stage 3: orbit from empty space; starting on furniture now drags it.

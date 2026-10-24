@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DEFAULT_APPEARANCE, openingError, wallLength } from './model'
 import type { Layout, Opening, Wall } from './model'
 import type { Dispatch, SetStateAction } from 'react'
+import { WALL_COLORS, FLOOR_COLORS } from './finishes'
 
 export function RoomOptions({layout,onChange}:{layout:Layout;onChange:Dispatch<SetStateAction<Layout>>}){
   const appearance=layout.appearance??DEFAULT_APPEARANCE
@@ -22,9 +23,12 @@ export function RoomOptions({layout,onChange}:{layout:Layout;onChange:Dispatch<S
   }
   const field=(label:string,value:string,set:Dispatch<SetStateAction<string>>,min:number,max:number)=><label className="rs-field">{label}<input aria-label={label} type="number" min={min} max={max} step="0.1" value={value} onChange={e=>set(e.target.value)}/></label>
   return <div className="rs-room-options">
-    <details><summary>Room finishes</summary><div className="rs-options-body">
+    <details><summary>Room finishes</summary><div className="rs-options-body"><p>A considered palette. Make it your own with any custom color.</p>
+      <div className="rs-palette" role="group" aria-label="Curated wall colors">{WALL_COLORS.map(s=><button key={s.name} title={s.name} aria-label={'Wall: '+s.name} aria-pressed={appearance.wallColor===s.color} style={{background:s.color}} onClick={()=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),wallColor:s.color}}))}/>)}</div>
       <label className="rs-color">Wall color<input aria-label="Wall color" type="color" value={appearance.wallColor} onChange={e=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),wallColor:e.target.value}}))}/></label>
+      <div className="rs-palette" role="group" aria-label="Curated floor colors">{FLOOR_COLORS.map(s=><button key={s.name} title={s.name} aria-label={'Floor: '+s.name} aria-pressed={appearance.floorColor===s.color} style={{background:s.color}} onClick={()=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),floorColor:s.color}}))}/>)}</div>
       <label className="rs-color">Floor color<input aria-label="Floor color" type="color" value={appearance.floorColor} onChange={e=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),floorColor:e.target.value}}))}/></label>
+      <div className="rs-materials" role="group" aria-label="Floor finishes">{(['wood','tile','plain'] as const).map(material=><button key={material} title={'Choose '+(material==='plain'?'solid':material)+' flooring'} aria-pressed={appearance.floorMaterial===material} onClick={()=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),floorMaterial:material}}))}><span className={'rs-material-preview '+material} style={{backgroundColor:appearance.floorColor}}/><span>{material==='plain'?'Solid':material==='wood'?'Wood':'Tile'}</span></button>)}</div>
       <label className="rs-field">Floor material<select aria-label="Floor material" value={appearance.floorMaterial} onChange={e=>onChange(l=>({...l,appearance:{...(l.appearance??DEFAULT_APPEARANCE),floorMaterial:e.target.value as typeof appearance.floorMaterial}}))}><option value="wood">Wood</option><option value="tile">Tile</option><option value="plain">Neutral solid</option></select></label>
     </div></details>
     <details><summary>Doors & windows ({layout.openings?.length??0})</summary><div className="rs-options-body"><p>North is the top of the 2D plan. Position is measured from the west end of N/S walls, or the north end of E/W walls.</p>
