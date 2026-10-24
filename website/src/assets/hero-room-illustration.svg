@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360" preserveAspectRatio="xMidYMid meet" overflow="hidden">
+  <defs>
+    <linearGradient id="wall" x1="24" y1="18" x2="450" y2="288" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F4E9"/>
+      <stop offset="1" stop-color="#EDE8D9"/>
+    </linearGradient>
+    <linearGradient id="window" x1="72" y1="54" x2="222" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E5EBD7"/>
+      <stop offset="1" stop-color="#C7D6C1"/>
+    </linearGradient>
+    <linearGradient id="sofa" x1="160" y1="179" x2="339" y2="272" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#82947A"/>
+      <stop offset="1" stop-color="#5E755F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="480" height="360" fill="url(#wall)"/>
+  <path d="M0 269h480v91H0z" fill="#D3B88F"/>
+  <path d="M0 265h480v7H0z" fill="#B89A73" fill-opacity=".55"/>
+
+  <!-- Window and garden light -->
+  <rect x="37" y="33" width="190" height="184" rx="3" fill="#8F765C"/>
+  <rect x="45" y="41" width="174" height="168" fill="#F9F5EA"/>
+  <rect x="53" y="49" width="158" height="152" fill="url(#window)"/>
+  <path d="M53 153c30-36 55-38 78-13 24-32 51-35 80-8v69H53z" fill="#9DAD8F"/>
+  <path d="M53 176c28-24 53-25 78-5 25-30 52-32 80-5v35H53z" fill="#70876B"/>
+  <path d="M132 49v152M53 124h158" stroke="#F9F5EA" stroke-width="7"/>
+  <path d="M132 49v152M53 124h158" stroke="#A28B6E" stroke-opacity=".48" stroke-width="1.5"/>
+
+  <!-- Small framed print and a charcoal detail -->
+  <rect x="340" y="50" width="91" height="74" fill="#A77D55"/>
+  <rect x="346" y="56" width="79" height="62" fill="#F9F5EA"/>
+  <rect x="351" y="61" width="69" height="52" fill="#E7EADB"/>
+  <circle cx="399" cy="75" r="8" fill="#D7BD86"/>
+  <path d="m351 105 20-20 14 13 13-17 22 24z" fill="#82947A"/>
+  <path d="M326 136h119" stroke="#383D38" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Sofa, cushions, and quiet wood legs -->
+  <ellipse cx="248" cy="310" rx="161" ry="20" fill="#735D45" fill-opacity=".13"/>
+  <path d="m157 258 13 2-8 36h-11zm169 2 13-2 8 38h-12z" fill="#755940"/>
+  <path d="M135 213c0-20 16-36 36-36h133c31 0 56 25 56 56v35H135z" fill="url(#sofa)"/>
+  <path d="M123 230c0-17 14-31 31-31h45v69h-76z" fill="#6D8368"/>
+  <path d="M202 199h79c17 0 31 14 31 31v38h-110z" fill="#71866D"/>
+  <path d="M202 202v62m82-59v59" stroke="#E3E6D8" stroke-opacity=".35" stroke-width="2"/>
+  <path d="M145 211h39v38h-39z" fill="#DEC8A4"/>
+  <path d="M216 208h42v42h-42z" fill="#CBD4C0"/>
+
+  <!-- Low oak table with a simple book -->
+  <path d="m236 264 11 1-7 38h-9zm70 1 11-1 6 39h-10z" fill="#77583F"/>
+  <path d="m218 245 115 0-10 18h-95z" fill="#A77C53"/>
+  <path d="M230 247h91" stroke="#C9A276" stroke-width="2" stroke-linecap="round"/>
+  <path d="M260 235h39v8h-39z" fill="#71836B"/>
+  <path d="M264 237h31" stroke="#E9E5D7" stroke-width="1.5"/>
+
+  <!-- One leafy plant, kept within the artboard -->
+  <path d="M385 269c-2-33-6-51-18-70m18 70c1-36 10-55 25-71m-25 71c-14-27-25-40-40-49m40 49c15-23 29-35 45-41" fill="none" stroke="#536D55" stroke-width="3" stroke-linecap="round"/>
+  <path d="M367 211c-24-3-32-18-28-37 18 3 28 13 28 37m19-18c-2-21 7-34 25-39 4 19-4 32-25 39m-40 30c-20 4-31-5-36-21 16-6 29-1 36 21m68-1c4-19 16-28 35-27-1 17-12 27-35 27" fill="#789171"/>
+  <path d="M374 261h22l-3 24h-17z" fill="#667C60"/>
+  <path d="M375 264h20" stroke="#343A35" stroke-opacity=".7" stroke-width="2"/>
+
+  <path d="M24 288h64m56 43h91m81-20h70m-49-46h97" stroke="#F3E0C1" stroke-opacity=".3" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
