@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { HousingProfileData } from '../housing-profile'
 import {
   getCompatibilityMatch,
@@ -18,6 +18,26 @@ export interface RoommateMatchingProps {
 }
 
 type AiState = { status: 'idle' | 'loading' | 'success' | 'unavailable'; result?: MatchResult; message?: string }
+
+const aiCacheKey = (profileId: string, currentProfile: HousingProfileData) =>
+  `roomroot:match-insights:${profileId}:${JSON.stringify(currentProfile)}`
+
+function readCachedInsights(key: string): MatchResult | undefined {
+  try {
+    const value = sessionStorage.getItem(key)
+    return value ? JSON.parse(value) as MatchResult : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function cacheInsights(key: string, value: MatchResult) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Matching still works when storage is unavailable or full.
+  }
+}
 
 const money = (value: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
@@ -75,24 +95,39 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
     }
   }, [candidate, currentProfile, deterministic])
 
-  async function requestAiExplanation() {
-    if (!candidate || ai[candidate.id]?.status === 'loading') return
-    const id = candidate.id
-    const request = createMatchingRequest(currentProfile, candidate.profile)
+  const requestAiInsights = useCallback(async (target: FictionalRoommate) => {
+    if (ai[target.id]?.status === 'loading') return
+    const id = target.id
+    const request = createMatchingRequest(currentProfile, target.profile)
+    const cacheKey = aiCacheKey(id, currentProfile)
+    const cached = readCachedInsights(cacheKey)
+    if (cached) {
+      setAi(previous => ({ ...previous, [id]: { status: 'success', result: cached } }))
+      return
+    }
     setAi(previous => ({ ...previous, [id]: { status: 'loading' } }))
     try {
       const value = await getCompatibilityMatch(request.seeker, request.host)
+      if (value.aiGenerated) cacheInsights(cacheKey, value)
       setAi(previous => ({
         ...previous,
         [id]: value.aiGenerated
           ? { status: 'success', result: value }
-          : { status: 'unavailable', message: 'Gemma did not return an explanation for this match.' },
+          : { status: 'unavailable', message: 'No additional match notes were returned.' },
       }))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'AI explanation is temporarily unavailable.'
+      const message = error instanceof Error ? error.message : 'Smart match notes are temporarily unavailable.'
       setAi(previous => ({ ...previous, [id]: { status: 'unavailable', message } }))
     }
-  }
+  }, [ai, currentProfile])
+
+  useEffect(() => {
+    if (!candidate || !result || aiState) return
+    const cached = readCachedInsights(aiCacheKey(candidate.id, currentProfile))
+    const target = candidate
+    const timer = window.setTimeout(() => void requestAiInsights(target), cached ? 0 : 450)
+    return () => window.clearTimeout(timer)
+  }, [aiState, candidate, currentProfile, requestAiInsights, result])
 
   function resetDeck() { dispatch({ type: 'reset' }) }
   function updateFilter(update: () => void) { update(); dispatch({ type: 'rewind' }) }
@@ -137,17 +172,26 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
               {!result && !deterministicError[candidate.id] && <div className="rm-loading" role="status"><span />Calculating deterministic compatibility…</div>}
               {deterministicError[candidate.id] && <div className="rm-alert" role="alert"><strong>Matching service unavailable</strong><p>{deterministicError[candidate.id]}</p></div>}
               {result && <>
-                <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">DETERMINISTIC MATCH</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
-                <p className="rm-method">Calculated by RoomRoot’s weighted rules—not by AI.</p>
+                <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
+                <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 <section><h3>Lifestyle breakdown</h3><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>Weight {item.weight.toFixed(1)}</small></div></div>)}</div></section>
                 {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
-                <section className="rm-ai"><p className="rm-kicker">OPTIONAL GEMMA 4 EXPLANATION</p>
-                  {!aiState && <><p>Ask the exact free Gemma 4 route for extra conversation prompts. Your deterministic score above does not depend on AI.</p><button type="button" onClick={() => void requestAiExplanation()}>Generate AI explanation</button></>}
-                  {aiState?.status === 'loading' && <p role="status">Asking Gemma for additional context…</p>}
-                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>AI explanation temporarily unavailable.</strong><p>Your deterministic score and breakdown above remain available. {aiState.message}</p><button type="button" onClick={() => void requestAiExplanation()}>Try Gemma again</button></div>}
-                  {aiState?.status === 'success' && aiState.result && <><p>{aiState.result.summary}</p><h4>Strengths</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul><h4>Potential conflicts</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul><h4>Questions to discuss</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul><small>Generated by Gemma 4; advisory, not a safety certification.</small></>}
+                <section className="rm-ai">
+                  <div className="rm-ai-heading"><div><p className="rm-kicker">SMART MATCH NOTES</p><h3>AI flagged these</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
+                  {!aiState && <div className="rm-ai-skeleton" aria-hidden="true"><span /><span /><span /></div>}
+                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Checking the details that matter day to day…</div>}
+                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are taking a break.</strong><p>Your verified score and dealbreakers are still ready. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Refresh insights</button></div>}
+                  {aiState?.status === 'success' && aiState.result && <>
+                    <p className="rm-ai-summary">{aiState.result.summary}</p>
+                    <div className="rm-ai-columns">
+                      {!!aiState.result.strengths.length && <div className="rm-ai-positive"><h4>✓ Looks aligned</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Talk this through</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                    </div>
+                    {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>Ask before you commit</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                    <details className="rm-ai-disclosure"><summary>How these notes work</summary><p>AI turns the profile comparison into plain-language prompts. It does not change the rules-based score, verify identity, or certify safety.</p></details>
+                  </>}
                 </section>
               </>}
             </div>

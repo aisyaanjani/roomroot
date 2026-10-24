@@ -8,7 +8,7 @@
 2. It passes `draft.profile`—the actual exported `HousingProfileData`—to `RoommateMatching`.
 3. `adapter.ts` maps that profile and each fictional candidate to the backend wire format.
 4. The component calls `POST /api/match/deterministic` first and renders its authoritative score and breakdown.
-5. It then calls the existing `POST /api/match` through `matchingApi.ts`. A genuine successful Gemma response is labeled as AI-generated. Timeout or model errors leave the deterministic result visible with an unavailable notice.
+5. It then calls the existing `POST /api/match` in the background through `matchingApi.ts`, after the candidate remains visible briefly. Successful smart notes are cached for the browser session so revisiting a candidate is instant and does not consume another free-tier request. Timeout or model errors leave the deterministic result visible with a retry option.
 
 The frontend never computes a compatibility percentage. Importance weights, hard constraints, missing-answer handling, and dealbreakers are all evaluated by `server/matchingEngine.js`.
 
