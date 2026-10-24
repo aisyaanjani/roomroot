@@ -244,7 +244,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                   <div className="rm-ai-heading"><div><p className="rm-kicker">SMART MATCH NOTES</p><h3>AI flagged these</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
                   {!aiState && <div className="rm-ai-skeleton" aria-hidden="true"><span /><span /><span /></div>}
                   {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Checking for possible roommate friction…</div>}
-                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are taking a break.</strong><p>Your verified score, expectation mirror, and dealbreakers are still ready. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Refresh insights</button></div>}
+                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are briefly busy.</strong><p>Your core match and expectation mirror still work without AI. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Try free AI again</button></div>}
                   {aiState?.status === 'success' && aiState.result && <>
                     <p className="rm-ai-summary">{aiState.result.summary}</p>
                     <div className="rm-ai-columns">

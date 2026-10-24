@@ -125,15 +125,22 @@ export async function generateGemmaAnalysis(prompt, options = {}) {
   const serializedPayload = JSON.stringify(request.payload);
 
   try {
-    const response = await fetchImpl(request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: serializedPayload,
-      signal: controller.signal
-    });
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
+    let response;
+    let body;
+    const retryDelays = configuration.provider === 'google' ? (options.retryDelaysMs || [350, 900]) : [];
+    for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+      response = await fetchImpl(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: serializedPayload,
+        signal: controller.signal
+      });
+      body = await response.json().catch(() => ({}));
+      if (response.ok) break;
+      if (response.status === 429 && attempt < retryDelays.length) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+        continue;
+      }
       throw new AiProviderError(`${configuration.provider} request failed.`, {
         provider: configuration.provider,
         status: response.status,
@@ -197,7 +204,7 @@ export function describeAiFailure(error, configuration) {
     };
   }
   if (status === 429) {
-    return { status: 503, error: 'The free AI provider rate limit has been reached.', code: 'AI_PROVIDER_RATE_LIMITED' };
+    return { status: 503, error: 'Free AI is briefly busy. Wait a moment and refresh—no charge was attempted.', code: 'AI_PROVIDER_RATE_LIMITED' };
   }
   if (status >= 500) {
     return { status: 503, error: 'The AI provider is temporarily unavailable.', code: 'AI_PROVIDER_UNAVAILABLE' };

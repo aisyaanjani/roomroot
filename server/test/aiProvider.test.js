@@ -161,6 +161,31 @@ test('surfaces OpenRouter HTTP status without exposing its response body', async
   );
 });
 
+test('retries brief Google free-tier rate limits and succeeds without changing providers', async () => {
+  let attempts = 0;
+  const text = await generateGemmaAnalysis('fictional prompt', {
+    configuration: googleConfiguration(),
+    retryDelaysMs: [0],
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          ok: false,
+          status: 429,
+          json: async () => ({ error: { status: 'RESOURCE_EXHAUSTED' } })
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: '{"summary":"Ready","strengths":[],"conflicts":[],"questions":[]}' }] } }] })
+      };
+    }
+  });
+  assert.equal(attempts, 2);
+  assert.match(text, /"summary":"Ready"/);
+});
+
 test('cancels a provider request when the timeout expires', async () => {
   await assert.rejects(
     generateGemmaAnalysis('fictional prompt', {
