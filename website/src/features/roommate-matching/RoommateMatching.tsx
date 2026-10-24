@@ -32,6 +32,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<Record<string, AiState>>({})
   const startedMatches = useRef(new Set<string>())
+  const completedMatches = useRef(new Set<string>())
 
   const cities = useMemo(() => ['All cities', ...new Set(profiles.map(item => item.profile.housingBasics.city))], [profiles])
   const housingTypes = useMemo(() => ['Any housing', ...new Set(profiles.flatMap(item => item.profile.propertyPreferences.housingTypes))], [profiles])
@@ -48,9 +49,10 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const aiState = candidate ? ai[candidate.id] : undefined
 
   useEffect(() => {
-    if (!candidate || startedMatches.current.has(candidate.id)) return
+    const started = startedMatches.current
+    if (!candidate || started.has(candidate.id) || completedMatches.current.has(candidate.id)) return
     const id = candidate.id
-    startedMatches.current.add(id)
+    started.add(id)
     const request = createMatchingRequest(currentProfile, candidate.profile)
     let active = true
     async function loadMatch() {
@@ -64,6 +66,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         return
       }
       if (!active) return
+      completedMatches.current.add(id)
       setDeterministic(previous => ({ ...previous, [id]: deterministicResult }))
       setAi(previous => ({ ...previous, [id]: { status: 'loading' } }))
       try {
@@ -82,7 +85,10 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
       }
     }
     void loadMatch()
-    return () => { active = false }
+    return () => {
+      active = false
+      started.delete(id)
+    }
   }, [candidate, currentProfile])
 
   function resetDeck() { dispatch({ type: 'reset' }) }

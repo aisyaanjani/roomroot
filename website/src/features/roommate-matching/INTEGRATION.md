@@ -40,6 +40,16 @@ export function MatchingPage() {
 
 The parent should reload the saved profile when entering or refreshing the matching route because the questionnaire persists to local storage and does not publish live updates.
 
+## Isolated development preview
+
+Run the backend and Vite development server, then open:
+
+```text
+http://localhost:5173/src/features/roommate-matching/preview.html
+```
+
+This page mounts the real `RoommateMatching` component with a clearly labeled fictional completed seeker profile and the existing eight fictional candidates. It does not use `App.tsx`, `main.tsx`, application routing, or global styles. Scores still come from the backend, and Gemma errors are displayed rather than replaced with demo AI text.
+
 ## Backend requirements
 
 Run the server on port 3001:
