@@ -1,4 +1,3 @@
-const GOOGLE_MODEL = 'models/gemma-4-26b-a4b-it';
 const OPENROUTER_MODEL = 'google/gemma-4-26b-a4b-it:free';
 
 export class AiProviderError extends Error {
@@ -12,18 +11,7 @@ export class AiProviderError extends Error {
 }
 
 export function getAiConfiguration(env = process.env) {
-  const provider = (env.AI_PROVIDER || 'google').trim().toLowerCase();
-
-  if (provider === 'google') {
-    const model = env.AI_MODEL || GOOGLE_MODEL;
-    if (model !== GOOGLE_MODEL) throw new Error(`Unsupported Google model: ${model}`);
-    return {
-      provider,
-      model,
-      apiKey: env.GEMINI_API_KEY,
-      requiredKey: 'GEMINI_API_KEY'
-    };
-  }
+  const provider = (env.AI_PROVIDER || 'openrouter').trim().toLowerCase();
 
   if (provider === 'openrouter') {
     const model = env.AI_MODEL || OPENROUTER_MODEL;
@@ -39,42 +27,6 @@ export function getAiConfiguration(env = process.env) {
   throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
 }
 
-function googleRequest(prompt, configuration) {
-  return {
-    url: `https://generativelanguage.googleapis.com/v1beta/${configuration.model}:generateContent`,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': configuration.apiKey
-    },
-    payload: {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-        maxOutputTokens: 400,
-        thinkingConfig: { thinkingLevel: 'minimal' }
-      }
-    },
-    extractText(body) {
-      return body?.candidates?.[0]?.content?.parts
-        ?.filter((part) => part.thought !== true)
-        .map((part) => part.text || '')
-        .join('');
-    },
-    metrics(body) {
-      const candidate = body?.candidates?.[0];
-      const usage = body?.usageMetadata || {};
-      return {
-        promptTokenCount: usage.promptTokenCount ?? null,
-        candidatesTokenCount: usage.candidatesTokenCount ?? null,
-        thoughtsTokenCount: usage.thoughtsTokenCount ?? null,
-        totalTokenCount: usage.totalTokenCount ?? null,
-        finishReason: candidate?.finishReason ?? null
-      };
-    }
-  };
-}
-
 function openRouterRequest(prompt, configuration) {
   return {
     url: 'https://openrouter.ai/api/v1/chat/completions',
@@ -86,6 +38,7 @@ function openRouterRequest(prompt, configuration) {
     },
     payload: {
       model: configuration.model,
+      provider: { max_price: { prompt: 0, completion: 0 } },
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
       temperature: 0.2,
@@ -110,9 +63,11 @@ function openRouterRequest(prompt, configuration) {
 export async function generateGemmaAnalysis(prompt, options = {}) {
   const configuration = options.configuration || getAiConfiguration(options.env);
   const fetchImpl = options.fetchImpl || fetch;
-  const request = configuration.provider === 'openrouter'
-    ? openRouterRequest(prompt, configuration)
-    : googleRequest(prompt, configuration);
+  // Validate even explicitly supplied configurations before any network request.
+  if (configuration.provider !== 'openrouter' || configuration.model !== OPENROUTER_MODEL) {
+    throw new Error('Only the exact free OpenRouter Gemma 4 model is allowed.');
+  }
+  const request = openRouterRequest(prompt, configuration);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000);
   const startedAt = performance.now();
@@ -203,6 +158,5 @@ export function describeAiFailure(error, configuration) {
 }
 
 export const AI_MODELS = {
-  google: GOOGLE_MODEL,
   openrouter: OPENROUTER_MODEL
 };

@@ -25,11 +25,15 @@ export interface MatchBreakdown {
   hostValue?: unknown
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '')).replace(/\/$/, '')
 
 async function requestMatch(path: string, seeker: HousingProfile, host: HousingProfile): Promise<MatchResult> {
+  if (!API_BASE_URL) throw new Error('The matching service is not configured for this release.')
+  const url = new URL(API_BASE_URL)
+  if (import.meta.env.PROD && url.protocol !== 'https:') throw new Error('The matching service requires HTTPS.')
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(25_000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ seeker, host }),
   })

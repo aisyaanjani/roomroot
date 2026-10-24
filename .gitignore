@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Public release endpoint and base path only; contains no secrets.
+!website/.env.release

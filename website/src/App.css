@@ -182,3 +182,12 @@
     border-right-color: var(--border);
   }
 }
+
+/* App navigation wraps the existing independently authored features. */
+:root { color-scheme: light; }
+#root { width: 100%; border: 0; text-align: left; }
+.rr-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 20px 28px; background: #f7f5ef; border-bottom: 1px solid #d9dfd6; }
+.rr-nav a, .rr-next a { color: #46634b; font-weight: 600; }
+.rr-nav a:first-child { margin-right: auto; text-decoration: none; font-size: 24px; }
+.rr-nav a[aria-current=page] { text-decoration-thickness: 3px; text-underline-offset: 6px; }
+.rr-next { padding: 32px; text-align: center; background: #f7f5ef; }

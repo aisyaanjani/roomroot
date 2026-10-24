@@ -4,7 +4,7 @@ This Express API compares a fictional housing seeker's profile with a fictional 
 
 ## Setup
 
-Requirements: Node.js 20 or newer and either an OpenRouter key with access to the free Gemma 4 route or a Google Gemini API key with access to `gemma-4-26b-a4b-it`.
+Requirements: Node.js 20 or newer and an OpenRouter key with access to the exact free Gemma 4 route.
 
 ```bash
 cd server
@@ -12,16 +12,9 @@ npm install
 cp .env.example .env
 ```
 
-Open `.env` and replace `your_api_key_here` with your key. Never put the key in the React app, commit `.env`, or share it in logs. The repository's `.gitignore` excludes `.env` files while allowing `.env.example`.
+Open `.env` and replace `your_openrouter_api_key_here` with your key. Never put the key in the React app, commit `.env`, or share it in logs. The repository's `.gitignore` excludes `.env` files while allowing `.env.example`.
 
-Choose the Gemma 4 API provider in `.env`. Google remains the default:
-
-```text
-AI_PROVIDER=google
-GEMINI_API_KEY=your_google_api_key
-```
-
-For OpenRouter's free Gemma 4 route, use:
+Use only OpenRouter's exact free Gemma 4 route:
 
 ```text
 AI_PROVIDER=openrouter
@@ -29,7 +22,7 @@ AI_MODEL=google/gemma-4-26b-a4b-it:free
 OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
-The OpenRouter transport accepts only `google/gemma-4-26b-a4b-it:free`; the Google transport accepts only `models/gemma-4-26b-a4b-it`. Any substitute or paid model identifier is rejected instead of being used as a fallback. Provider credentials are server-only. Both transports use the same compact prompt, strict response validation, 20-second timeout, deterministic score, and fallback behavior.
+Only `google/gemma-4-26b-a4b-it:free` is accepted, including when callers supply configuration directly. Google transport, paid model IDs, and alternate providers are rejected before any request. The payload caps prompt and completion prices at zero and contains no model fallback list. Credentials remain server-only. Requests retain the 20-second timeout and deterministic scoring stays authoritative.
 
 OpenRouter hosts genuine Google Gemma 4 weights through a free, capacity-dependent route. Free availability and quotas can change, requests can fail when providers are busy, and the free route is not a production SLA. Check the [official model page](https://openrouter.ai/google/gemma-4-26b-a4b-it:free) and [OpenRouter limits](https://openrouter.ai/docs/api-reference/limits) before a demo. Gemma 4 is released under the [Apache 2.0 license](https://huggingface.co/google/gemma-4-26b-a4b-it/blob/main/LICENSE).
 
