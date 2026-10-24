@@ -14,6 +14,27 @@ app.use(express.json({ limit: '20kb' }));
 
 const model = 'models/gemma-4-26b-a4b-it';
 
+function deterministicResponse(deterministic) {
+  const matches = deterministic.comparisons.filter((item) => item.matches);
+  const mismatches = deterministic.comparisons.filter((item) => !item.matches);
+  return {
+    eligible: deterministic.eligible,
+    compatibilityScore: deterministic.compatibilityScore,
+    summary: deterministic.compatibilityScore === null
+      ? 'More shared profile information is needed for a fair score.'
+      : `Deterministic compatibility is ${deterministic.compatibilityScore}%.`,
+    strengths: matches.map((item) => `Compatible ${item.field}.`),
+    conflicts: mismatches.map((item) => `Different ${item.field}.`),
+    questions: deterministic.discussionItems,
+    missingInformation: deterministic.missingInformation,
+    hardConstraints: deterministic.hardConstraints,
+    dealbreakerConflicts: deterministic.dealbreakerConflicts,
+    discussionItems: deterministic.discussionItems,
+    breakdown: deterministic.comparisons,
+    aiGenerated: false
+  };
+}
+
 async function generateGemmaAnalysis(prompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -63,24 +84,31 @@ function parseGemmaJson(text) {
   return JSON.parse(candidate);
 }
 
-app.post('/api/match', async (req, res) => {
+function prepareMatch(req, res) {
   const validationError = validateProfiles(req.body);
-  if (validationError) return res.status(400).json({ error: validationError });
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return null;
+  }
 
   const { seeker, host } = req.body;
   const deterministic = calculateDeterministicMatch(seeker, host);
+  return { seeker, host, deterministic };
+}
+
+app.post('/api/match/deterministic', (req, res) => {
+  const prepared = prepareMatch(req, res);
+  if (!prepared) return;
+  res.json(deterministicResponse(prepared.deterministic));
+});
+
+app.post('/api/match', async (req, res) => {
+  const prepared = prepareMatch(req, res);
+  if (!prepared) return;
+  const { seeker, host, deterministic } = prepared;
 
   if (!deterministic.eligible) {
-    return res.json({
-      eligible: false,
-      compatibilityScore: deterministic.compatibilityScore,
-      summary: 'The profiles do not meet one or more objective housing requirements.',
-      strengths: [],
-      conflicts: [],
-      questions: ['Can either party adjust the listed objective requirements?'],
-      missingInformation: [],
-      hardConstraints: deterministic.hardConstraints
-    });
+    return res.json(deterministicResponse(deterministic));
   }
 
   if (!process.env.GEMINI_API_KEY) {
@@ -96,10 +124,9 @@ app.post('/api/match', async (req, res) => {
     );
     const analysis = validateAiAnalysis(parseGemmaJson(responseText));
     res.json({
-      eligible: true,
-      compatibilityScore: deterministic.compatibilityScore,
+      ...deterministicResponse(deterministic),
       ...analysis,
-      hardConstraints: []
+      aiGenerated: true
     });
   } catch (error) {
     console.error('AI request failed:', error.message);

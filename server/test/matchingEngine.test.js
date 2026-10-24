@@ -67,3 +67,66 @@ test('validates and strips unexpected AI response values', () => {
   assert.deepEqual(result.strengths, ['Shared quiet hours.']);
   assert.equal('compatibilityScore' in result, false);
 });
+
+test('importance weights change the score without becoming dealbreakers', () => {
+  const result = calculateDeterministicMatch(
+    {
+      monthlyBudget: 1200,
+      sleepSchedule: 'Early bird',
+      noisePreference: 'Quiet',
+      importance: {
+        'Sleep schedule compatibility': 1,
+        'Noise compatibility': 5
+      }
+    },
+    {
+      monthlyRent: 1000,
+      sleepSchedule: 'Night owl',
+      noisePreference: 'Quiet',
+      importance: {
+        'Sleep schedule compatibility': 1,
+        'Noise compatibility': 5
+      }
+    }
+  );
+  assert.equal(result.compatibilityScore, 86);
+  assert.equal(result.eligible, true);
+});
+
+test('confirmed dealbreakers are evaluated separately from the score', () => {
+  const result = calculateDeterministicMatch(
+    {
+      monthlyBudget: 1200,
+      sleepSchedule: 'Flexible',
+      petPreferences: 'Prefer no pets',
+      dealbreakers: ['Pets in the home']
+    },
+    {
+      monthlyRent: 1000,
+      sleepSchedule: 'Flexible',
+      petPreferences: 'Have pets'
+    }
+  );
+  assert.equal(result.eligible, false);
+  assert.equal(result.dealbreakerConflicts.length, 1);
+  assert.match(result.dealbreakerConflicts[0], /having pets/);
+});
+
+test('ambiguous and missing answers require discussion without automatic rejection', () => {
+  const result = calculateDeterministicMatch(
+    {
+      monthlyBudget: 1200,
+      sleepSchedule: 'Early bird',
+      dealbreakers: ['Smoking indoors', 'Unannounced guests']
+    },
+    {
+      monthlyRent: 1000,
+      smokingPreferences: 'Smoker',
+      noisePreference: 'Moderate'
+    }
+  );
+  assert.equal(result.eligible, true);
+  assert.ok(result.discussionItems.some(item => item.includes('smoking location')));
+  assert.ok(result.discussionItems.some(item => item.includes('notice expectations')));
+  assert.ok(result.missingInformation.some(item => item.includes('Noise preference')));
+});
