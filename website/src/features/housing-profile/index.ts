@@ -1,0 +1,6 @@
+export { HousingProfile } from './HousingProfile'
+export type { HousingBasics, PropertyPreferences, AmenityPriority, Lifestyle, RoommatePreferences, Priorities, HousingProfileData, HousingProfileDraft } from './types'
+export { saveHousingProfile, loadHousingProfile, updateHousingProfile, resetHousingProfile, isHousingProfileDraft, HOUSING_PROFILE_STORAGE_KEY } from './storage'
+export { createHousingProfile, sections, housingTypes, amenities, lifestyleQuestions, compatibility, dealbreakers, priorityOptions } from './questions'
+export { validateSection } from './validation'
+export type { ProfileIssue } from './validation'

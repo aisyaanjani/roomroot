@@ -1,0 +1,6 @@
+export { RoommateMatching } from './RoommateMatching'
+export type { RoommateMatchingProps } from './RoommateMatching'
+export { adaptHousingProfile, createMatchingRequest } from './adapter'
+export type { NormalizedMatchingProfile } from './adapter'
+export { fictionalRoommates } from './demoProfiles'
+export type { FictionalRoommate } from './demoProfiles'
