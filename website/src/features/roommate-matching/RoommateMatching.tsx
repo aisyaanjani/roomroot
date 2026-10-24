@@ -49,20 +49,40 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [maxBudget, setMaxBudget] = useState(2000)
   const [moveInBy, setMoveInBy] = useState('')
   const [housingType, setHousingType] = useState('Any housing')
+  const [roommateDynamic, setRoommateDynamic] = useState('Any dynamic')
+  const [householdRhythm, setHouseholdRhythm] = useState('Any rhythm')
+  const [sharedMeals, setSharedMeals] = useState('Any meal style')
+  const [homeLanguage, setHomeLanguage] = useState('Any language')
+  const [kitchenStyle, setKitchenStyle] = useState('Any kitchen')
+  const [guestFrequency, setGuestFrequency] = useState('Any guest frequency')
+  const [smokeFree, setSmokeFree] = useState(false)
+  const [petPreference, setPetPreference] = useState('Any pet preference')
   const [deterministic, setDeterministic] = useState<Record<string, MatchResult>>({})
   const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<Record<string, AiState>>({})
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null)
   const startedMatches = useRef(new Set<string>())
+  const pointerStart = useRef<{ x: number; y: number } | null>(null)
 
   const cities = useMemo(() => ['All cities', ...new Set(profiles.map(item => item.profile.housingBasics.city))], [profiles])
   const housingTypes = useMemo(() => ['Any housing', ...new Set(profiles.flatMap(item => item.profile.propertyPreferences.housingTypes))], [profiles])
+  const homeLanguages = useMemo(() => ['Any language', ...new Set(profiles.flatMap(item => item.matchProfile.homeLanguages))], [profiles])
   const filtered = useMemo(() => profiles.filter(item => {
     const basics = item.profile.housingBasics
+    const lifestyle = item.profile.lifestyle
     return (city === 'All cities' || basics.city === city)
       && basics.minRent <= maxBudget
       && (!moveInBy || !basics.moveInDate || basics.moveInDate <= moveInBy)
       && (housingType === 'Any housing' || item.profile.propertyPreferences.housingTypes.includes(housingType))
-  }), [city, housingType, maxBudget, moveInBy, profiles])
+      && (roommateDynamic === 'Any dynamic' || item.matchProfile.roommateDynamic === roommateDynamic)
+      && (householdRhythm === 'Any rhythm' || item.matchProfile.householdRhythm === householdRhythm)
+      && (sharedMeals === 'Any meal style' || item.matchProfile.sharedMeals === sharedMeals)
+      && (homeLanguage === 'Any language' || item.matchProfile.homeLanguages.includes(homeLanguage))
+      && (kitchenStyle === 'Any kitchen' || item.matchProfile.kitchenStyle === kitchenStyle)
+      && (guestFrequency === 'Any guest frequency' || lifestyle.guests === guestFrequency)
+      && (!smokeFree || lifestyle.smoking === 'Prefer smoke-free home' || lifestyle.smoking === 'Non-smoker')
+      && (petPreference === 'Any pet preference' || lifestyle.pets === petPreference)
+  }), [city, guestFrequency, homeLanguage, householdRhythm, housingType, kitchenStyle, maxBudget, moveInBy, petPreference, profiles, roommateDynamic, sharedMeals, smokeFree])
 
   const candidate = filtered[state.currentIndex]
   const result = candidate ? deterministic[candidate.id] : undefined
@@ -131,6 +151,29 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
 
   function resetDeck() { dispatch({ type: 'reset' }) }
   function updateFilter(update: () => void) { update(); dispatch({ type: 'rewind' }) }
+  function swipe(action: 'pass' | 'like') {
+    if (!candidate || swipeDirection) return
+    setSwipeDirection(action === 'pass' ? 'left' : 'right')
+    window.setTimeout(() => {
+      dispatch({ type: action, id: candidate.id })
+      setSwipeDirection(null)
+    }, 180)
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
+    if ((event.target as HTMLElement).closest('button,input,select,a,summary')) return
+    pointerStart.current = { x: event.clientX, y: event.clientY }
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+    const start = pointerStart.current
+    pointerStart.current = null
+    if (!start) return
+    const horizontal = event.clientX - start.x
+    const vertical = Math.abs(event.clientY - start.y)
+    if (Math.abs(horizontal) < 75 || Math.abs(horizontal) < vertical * 1.25) return
+    swipe(horizontal < 0 ? 'pass' : 'like')
+  }
 
   return <main className="roommate-matching">
     <header className="rm-header">
@@ -146,6 +189,17 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         <label>Maximum rent <strong>{money(maxBudget)}</strong><input type="range" min="700" max="2500" step="50" value={maxBudget} onChange={event => updateFilter(() => setMaxBudget(Number(event.target.value)))} /></label>
         <label>Move in by<input type="date" value={moveInBy} onChange={event => updateFilter(() => setMoveInBy(event.target.value))} /></label>
         <label>Housing preference<select value={housingType} onChange={event => updateFilter(() => setHousingType(event.target.value))}>{housingTypes.map(value => <option key={value}>{value}</option>)}</select></label>
+        <details className="rm-more-filters"><summary>More compatibility filters</summary>
+          <label>Roommate dynamic<select value={roommateDynamic} onChange={event => updateFilter(() => setRoommateDynamic(event.target.value))}>{['Any dynamic','Friendly & communal','Independent','Study-focused','Balanced'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Household rhythm<select value={householdRhythm} onChange={event => updateFilter(() => setHouseholdRhythm(event.target.value))}>{['Any rhythm','Quiet & private','Social & communal','Balanced'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Shared meals<select value={sharedMeals} onChange={event => updateFilter(() => setSharedMeals(event.target.value))}>{['Any meal style','Often','Sometimes','Separate'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Language spoken at home<select value={homeLanguage} onChange={event => updateFilter(() => setHomeLanguage(event.target.value))}>{homeLanguages.map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Kitchen style<select value={kitchenStyle} onChange={event => updateFilter(() => setKitchenStyle(event.target.value))}>{['Any kitchen','Vegetarian-friendly','Allergy-aware','No restrictions'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Guests<select value={guestFrequency} onChange={event => updateFilter(() => setGuestFrequency(event.target.value))}>{['Any guest frequency','Rarely','Occasionally','Frequently'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label>Pets<select value={petPreference} onChange={event => updateFilter(() => setPetPreference(event.target.value))}>{['Any pet preference','Have pets','Comfortable with pets','Prefer no pets'].map(value => <option key={value}>{value}</option>)}</select></label>
+          <label className="rm-check"><input type="checkbox" checked={smokeFree} onChange={event => updateFilter(() => setSmokeFree(event.target.checked))} /> Smoke-free household</label>
+          <p className="rm-filter-note">Identity details are never used to rank or exclude housing matches.</p>
+        </details>
         <div className="rm-stats"><span><strong>{state.liked.length}</strong> liked</span><span><strong>{state.saved.length}</strong> saved</span></div>
       </aside>
 
@@ -153,7 +207,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         <div className="rm-heading"><div><p className="rm-kicker">YOUR COMPATIBILITY DECK</p><h1>Meet your next roommate.</h1></div><button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!state.history.length}>↶ Undo</button></div>
 
         {!candidate ? <section className="rm-empty"><span aria-hidden="true">🌿</span><h2>You’ve reached the end of this deck.</h2><p>Adjust your filters or review the fictional profiles again.</p><button type="button" onClick={resetDeck}>Restart deck</button></section> :
-          <article className="rm-card">
+          <article className={`rm-card${swipeDirection ? ` is-swiping-${swipeDirection}` : ''}`} tabIndex={0} aria-label={`${candidate.name} roommate match. Swipe or use arrow keys to decide.`} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onKeyDown={event => { if (event.key === 'ArrowLeft') swipe('pass'); if (event.key === 'ArrowRight') swipe('like') }}>
             <div className="rm-profile-pane">
               <div className="rm-avatar" aria-hidden="true">{candidate.initials}</div>
               <span className="rm-demo-label">FICTIONAL DEMO PROFILE</span>
@@ -166,6 +220,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <div><dt>Home</dt><dd>{candidate.profile.propertyPreferences.housingTypes.join(' · ')}</dd></div>
               </dl>
               <div className="rm-chips">{Object.values(candidate.profile.lifestyle).filter(Boolean).slice(0, 5).map(value => <span key={value}>{value}</span>)}</div>
+              <section className="rm-living-style"><h3>Living together</h3><dl><div><dt>Dynamic</dt><dd>{candidate.matchProfile.roommateDynamic}</dd></div><div><dt>Home vibe</dt><dd>{candidate.matchProfile.householdRhythm}</dd></div><div><dt>Meals</dt><dd>{candidate.matchProfile.sharedMeals}</dd></div><div><dt>Languages</dt><dd>{candidate.matchProfile.homeLanguages.join(' · ')}</dd></div><div><dt>Kitchen</dt><dd>{candidate.matchProfile.kitchenStyle}</dd></div></dl>{!!candidate.matchProfile.culturalNotes.length && <div className="rm-culture-notes">{candidate.matchProfile.culturalNotes.map(note => <span key={note}>{note}</span>)}</div>}<small>Shared voluntarily; not part of the match score.</small></section>
             </div>
 
             <div className="rm-analysis-pane">
@@ -196,9 +251,9 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
               </>}
             </div>
             <footer className="rm-actions">
-              <button className="rm-pass" type="button" onClick={() => dispatch({ type: 'pass', id: candidate.id })}>✕ Pass</button>
+              <button className="rm-pass" type="button" onClick={() => swipe('pass')}>✕ Pass</button>
               <button className="rm-save" type="button" aria-pressed={state.saved.includes(candidate.id)} onClick={() => dispatch({ type: 'save', id: candidate.id })}>☆ {state.saved.includes(candidate.id) ? 'Saved' : 'Save'}</button>
-              <button className="rm-like" type="button" onClick={() => dispatch({ type: 'like', id: candidate.id })}>♡ Like</button>
+              <button className="rm-like" type="button" onClick={() => swipe('like')}>♡ Like</button>
             </footer>
           </article>}
       </div>
