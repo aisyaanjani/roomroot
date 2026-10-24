@@ -50,6 +50,8 @@ const priorityLabel = (weight: number) => {
   return 'Preference'
 }
 
+const answerLabel = (value: unknown) => Array.isArray(value) ? value.join(', ') : String(value ?? 'Not answered')
+
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
   const [state, dispatch] = useReducer(discoveryReducer, initialDiscoveryState)
   const [city, setCity] = useState('All cities')
@@ -237,24 +239,26 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
                 <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
-                <section><h3>Why this score</h3><p className="rm-breakdown-help">Priorities you care about more have a bigger effect on compatibility.</p><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>{item.matches ? 'Aligned' : 'Different'} · {priorityLabel(item.weight)}</small></div></div>)}</div></section>
-                {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
-                {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
+                <details className="rm-score-explainer" open><summary>How RoomRoot calculated {result.compatibilityScore === null ? 'this match' : `${result.compatibilityScore}%`}</summary><ol><li><strong>Check must-haves.</strong> Budget, dates, lease needs, and stated dealbreakers come first.</li><li><strong>Compare shared answers.</strong> RoomRoot checks lifestyle and housing expectations both people answered.</li><li><strong>Respect your priorities.</strong> Cleanliness or quiet matters more when you marked it as important.</li><li><strong>Calculate the score.</strong> Aligned priority points ÷ all comparable priority points. AI does not set or change the percentage.</li></ol></details>
                 <section className="rm-ai">
                   <div className="rm-ai-heading"><div><p className="rm-kicker">SMART MATCH NOTES</p><h3>AI flagged these</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
                   {!aiState && <div className="rm-ai-skeleton" aria-hidden="true"><span /><span /><span /></div>}
-                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Checking the details that matter day to day…</div>}
-                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are taking a break.</strong><p>Your verified score and dealbreakers are still ready. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Refresh insights</button></div>}
+                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Checking for possible roommate friction…</div>}
+                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>Smart notes are taking a break.</strong><p>Your verified score, expectation mirror, and dealbreakers are still ready. {aiState.message}</p><button type="button" onClick={() => candidate && void requestAiInsights(candidate)}>Refresh insights</button></div>}
                   {aiState?.status === 'success' && aiState.result && <>
                     <p className="rm-ai-summary">{aiState.result.summary}</p>
                     <div className="rm-ai-columns">
                       {!!aiState.result.strengths.length && <div className="rm-ai-positive"><h4>✓ Looks aligned</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Talk this through</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
+                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Possible roommate conflict</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
                     </div>
                     {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>Ask before you commit</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                    <details className="rm-ai-disclosure"><summary>How these notes work</summary><p>AI turns the profile comparison into plain-language prompts. It does not change the rules-based score, verify identity, or certify safety.</p></details>
+                    <details className="rm-ai-disclosure"><summary>What AI does here</summary><p>AI translates the comparison into plain-language risks and conversation prompts. It does not rate people, change the score, verify identity, or certify safety.</p></details>
                   </>}
                 </section>
+                {!!result.breakdown.filter(item => !item.matches && item.seekerValue !== undefined && item.hostValue !== undefined).length && <section className="rm-mirror"><div className="rm-mirror-title"><div><p className="rm-kicker">EXPECTATION MIRROR</p><h3>Where daily life may feel different</h3></div><span>Possible friction</span></div><p>See the exact expectations side by side before you decide.</p><div className="rm-mirror-grid">{result.breakdown.filter(item => !item.matches && item.seekerValue !== undefined && item.hostValue !== undefined).slice(0, 4).map(item => <article key={item.field}><strong>{item.field}</strong><div><span>You</span><b>{answerLabel(item.seekerValue)}</b></div><div><span>{candidate.name.split(' ')[0]}</span><b>{answerLabel(item.hostValue)}</b></div><small>{priorityLabel(item.weight)} for this match</small></article>)}</div></section>}
+                <section><h3>Why this score</h3><p className="rm-breakdown-help">Priorities you care about more have a bigger effect on compatibility.</p><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>{item.matches ? 'Aligned' : 'Different'} · {priorityLabel(item.weight)}</small></div></div>)}</div></section>
+                {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
+                {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
               </>}
             </div>
             <footer className="rm-actions">
