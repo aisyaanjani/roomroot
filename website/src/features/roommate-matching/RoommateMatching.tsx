@@ -10,6 +10,7 @@ import { fictionalRoommates } from './demoProfiles'
 import type { FictionalRoommate } from './demoProfiles'
 import { discoveryReducer, initialDiscoveryState } from './discoveryState'
 import './RoommateMatching.css'
+import './RoommateMatchingEnhancements.css'
 
 export interface RoommateMatchingProps {
   currentProfile: HousingProfileData
@@ -32,7 +33,6 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<Record<string, AiState>>({})
   const startedMatches = useRef(new Set<string>())
-  const completedMatches = useRef(new Set<string>())
 
   const cities = useMemo(() => ['All cities', ...new Set(profiles.map(item => item.profile.housingBasics.city))], [profiles])
   const housingTypes = useMemo(() => ['Any housing', ...new Set(profiles.flatMap(item => item.profile.propertyPreferences.housingTypes))], [profiles])
@@ -50,7 +50,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
 
   useEffect(() => {
     const started = startedMatches.current
-    if (!candidate || started.has(candidate.id) || completedMatches.current.has(candidate.id)) return
+    if (!candidate || started.has(candidate.id) || deterministic[candidate.id]) return
     const id = candidate.id
     started.add(id)
     const request = createMatchingRequest(currentProfile, candidate.profile)
@@ -66,30 +66,33 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         return
       }
       if (!active) return
-      completedMatches.current.add(id)
       setDeterministic(previous => ({ ...previous, [id]: deterministicResult }))
-      setAi(previous => ({ ...previous, [id]: { status: 'loading' } }))
-      try {
-        const value = await getCompatibilityMatch(request.seeker, request.host)
-        if (!active) return
-        setAi(previous => ({
-          ...previous,
-          [id]: value.aiGenerated
-            ? { status: 'success', result: value }
-            : { status: 'unavailable', message: 'Gemma did not return an explanation for this match.' },
-        }))
-      } catch (error) {
-        if (!active) return
-        const message = error instanceof Error ? error.message : 'AI explanation is temporarily unavailable.'
-        setAi(previous => ({ ...previous, [id]: { status: 'unavailable', message } }))
-      }
     }
     void loadMatch()
     return () => {
       active = false
       started.delete(id)
     }
-  }, [candidate, currentProfile])
+  }, [candidate, currentProfile, deterministic])
+
+  async function requestAiExplanation() {
+    if (!candidate || ai[candidate.id]?.status === 'loading') return
+    const id = candidate.id
+    const request = createMatchingRequest(currentProfile, candidate.profile)
+    setAi(previous => ({ ...previous, [id]: { status: 'loading' } }))
+    try {
+      const value = await getCompatibilityMatch(request.seeker, request.host)
+      setAi(previous => ({
+        ...previous,
+        [id]: value.aiGenerated
+          ? { status: 'success', result: value }
+          : { status: 'unavailable', message: 'Gemma did not return an explanation for this match.' },
+      }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI explanation is temporarily unavailable.'
+      setAi(previous => ({ ...previous, [id]: { status: 'unavailable', message } }))
+    }
+  }
 
   function resetDeck() { dispatch({ type: 'reset' }) }
   function updateFilter(update: () => void) { update(); dispatch({ type: 'rewind' }) }
@@ -140,7 +143,12 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <section><h3>Lifestyle breakdown</h3><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>Weight {item.weight.toFixed(1)}</small></div></div>)}</div></section>
                 {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
-                <section className="rm-ai"><p className="rm-kicker">GEMMA 4 EXPLANATION</p>{aiState?.status === 'loading' && <p role="status">Asking Gemma for additional context…</p>}{aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>AI explanation temporarily unavailable.</strong><p>Your deterministic score and breakdown above remain available. {aiState.message}</p></div>}{aiState?.status === 'success' && aiState.result && <><p>{aiState.result.summary}</p><h4>Strengths</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul><h4>Potential conflicts</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul><h4>Questions to discuss</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul><small>Generated by Gemma 4; advisory, not a safety certification.</small></>}</section>
+                <section className="rm-ai"><p className="rm-kicker">OPTIONAL GEMMA 4 EXPLANATION</p>
+                  {!aiState && <><p>Ask the exact free Gemma 4 route for extra conversation prompts. Your deterministic score above does not depend on AI.</p><button type="button" onClick={() => void requestAiExplanation()}>Generate AI explanation</button></>}
+                  {aiState?.status === 'loading' && <p role="status">Asking Gemma for additional context…</p>}
+                  {aiState?.status === 'unavailable' && <div className="rm-ai-note"><strong>AI explanation temporarily unavailable.</strong><p>Your deterministic score and breakdown above remain available. {aiState.message}</p><button type="button" onClick={() => void requestAiExplanation()}>Try Gemma again</button></div>}
+                  {aiState?.status === 'success' && aiState.result && <><p>{aiState.result.summary}</p><h4>Strengths</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul><h4>Potential conflicts</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul><h4>Questions to discuss</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul><small>Generated by Gemma 4; advisory, not a safety certification.</small></>}
+                </section>
               </>}
             </div>
             <footer className="rm-actions">

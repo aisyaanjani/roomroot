@@ -1,0 +1,14 @@
+.rm-ai > button,
+.rm-ai-note button {
+  padding: 9px 14px;
+  border: 1px solid var(--rm-forest);
+  border-radius: 9px;
+  background: var(--rm-forest);
+  color: white;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.rm-ai-note p {
+  margin-bottom: 12px;
+}
