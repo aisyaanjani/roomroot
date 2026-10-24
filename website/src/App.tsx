@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { HousingProfile, loadHousingProfile, validateSection } from './features/housing-profile'
 import { RoommateMatching } from './features/roommate-matching'
+import RoomBrowsing from './Room browsing/rmbrowsing'
 import './App.css'
 
 const RoomPlanner = lazy(() => import('./features/room-planner').then(module => ({ default: module.RoomPlanner })))
-const routes = ['home', 'profile', 'matches', 'planner'] as const
+const routes = ['home', 'profile', 'matches', 'planner', 'browse'] as const
 type Route = typeof routes[number]
 const readRoute = (): Route => {
   const value = window.location.hash.slice(1)
@@ -26,11 +27,13 @@ function App() {
       <a href="#profile" aria-current={route === 'profile' ? 'page' : undefined}>Housing profile</a>
       <a href="#matches" aria-current={route === 'matches' ? 'page' : undefined}>Find roommates</a>
       <a href="#planner" aria-current={route === 'planner' ? 'page' : undefined}>Room planner</a>
+      <a href="#browse" aria-current={route === 'browse' ? 'page' : undefined}>Browse rooms</a>
     </nav>
     {route === 'home' && <Home />}
     {route === 'profile' && <><HousingProfile /><p className="rr-next"><a href="#matches">Continue to roommate matching →</a></p></>}
     {route === 'matches' && (ready && draft ? <RoommateMatching currentProfile={draft.profile} /> : <main className="rr-next"><h1>Your next chapter starts here.</h1><p>Complete your housing profile to explore the fictional roommate demo.</p><a href="#profile">Complete housing profile →</a></main>)}
     {route === 'planner' && <Suspense fallback={<p role="status">Loading room planner…</p>}><RoomPlanner /></Suspense>}
+    {route === 'browse' && <RoomBrowsing />}
   </>
 }
 
@@ -57,7 +60,7 @@ function Home() {
         through AI-powered lifestyle compatibility.
       </p>
 
-      <button onClick={() => { window.location.hash = 'profile' }} style={{
+      <button onClick={() => { window.location.hash = 'browse' }} style={{
         backgroundColor: '#46634B',
         color: 'white',
         padding: '14px 28px',

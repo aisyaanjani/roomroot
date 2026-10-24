@@ -1,0 +1,268 @@
+
+.neighborhood-map-section {
+  width: 100%;
+  margin-top: 28px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e3e8e1;
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.neighborhood-map-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.neighborhood-map-heading h3 {
+  margin: 0 0 6px;
+  color: #46634b;
+  font-size: 20px;
+}
+
+.neighborhood-map-heading p {
+  margin: 0;
+  color: #747d75;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.map-expand-button {
+  padding: 10px 15px;
+  border: 1px solid #46634b;
+  border-radius: 7px;
+  background: white;
+  color: #46634b;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-expand-button:hover {
+  background: #eaf0e9;
+}
+
+.map-category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 16px;
+}
+
+.map-category-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid #dce3da;
+  border-radius: 20px;
+  background: white;
+  color: #626b63;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.map-category-button.selected {
+  border-color: #46634b;
+  background: #eaf0e9;
+  color: #46634b;
+  opacity: 1;
+}
+
+.map-category-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.neighborhood-map-container {
+  width: 100%;
+  height: 380px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #e8ede6;
+}
+
+.roomroot-leaflet-map {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.roomroot-marker-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.roomroot-map-marker {
+  width: 17px;
+  height: 17px;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.roomroot-map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 130px;
+}
+
+.roomroot-map-popup strong {
+  color: #46634b;
+}
+
+.roomroot-map-popup span {
+  color: #747d75;
+  font-size: 12px;
+}
+
+.roomroot-map-popup p {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+
+.map-data-notice {
+  margin-top: 14px;
+  padding: 13px;
+  border-left: 4px solid #b76543;
+  border-radius: 5px;
+  background: #f1ede4;
+  color: #626b63;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.map-data-notice p {
+  margin: 5px 0 0;
+}
+
+.map-attribution-note {
+  margin: 10px 0 0;
+  color: #858d85;
+  font-size: 10px;
+}
+
+.map-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 24px;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 0;
+}
+
+.map-expanded .neighborhood-map-container {
+  flex: 1;
+  min-height: 350px;
+  height: auto;
+}
+
+@media (max-width: 600px) {
+  .neighborhood-map-section {
+    padding: 14px;
+  }
+
+  .neighborhood-map-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .neighborhood-map-container {
+    height: 300px;
+  }
+
+  .map-expanded {
+    padding: 12px;
+  }
+}
+
+/* Combined ROOMROOT property and amenity map */
+
+.neighborhood-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 16px 0;
+}
+
+.map-legend-heading {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.map-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.neighborhood-map-container {
+  width: 100%;
+  height: 450px;
+  position: relative;
+}
+
+.neighborhood-leaflet-map {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+}
+
+.property-map-popup {
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.property-map-popup p {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.property-map-popup small {
+  display: block;
+  margin-top: 9px;
+  color: #777;
+  line-height: 1.4;
+}
+
+.map-status {
+  margin: 10px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.map-error {
+  color: #a33;
+}
+
+@media (max-width: 600px) {
+  .neighborhood-map-container {
+    height: 350px;
+  }
+
+  .neighborhood-map-legend {
+    gap: 10px 14px;
+  }
+}
