@@ -194,6 +194,27 @@ export function calculateDeterministicMatch(seeker, host) {
   };
 }
 
+export function deterministicResponse(deterministic) {
+  const matches = deterministic.comparisons.filter((item) => item.matches);
+  const mismatches = deterministic.comparisons.filter((item) => !item.matches);
+  return {
+    eligible: deterministic.eligible,
+    compatibilityScore: deterministic.compatibilityScore,
+    summary: deterministic.compatibilityScore === null
+      ? 'More shared profile information is needed for a fair score.'
+      : `Deterministic compatibility is ${deterministic.compatibilityScore}%.`,
+    strengths: matches.map((item) => `Compatible ${item.field}.`),
+    conflicts: mismatches.map((item) => `Different ${item.field}.`),
+    questions: deterministic.discussionItems,
+    missingInformation: deterministic.missingInformation,
+    hardConstraints: deterministic.hardConstraints,
+    dealbreakerConflicts: deterministic.dealbreakerConflicts,
+    discussionItems: deterministic.discussionItems,
+    breakdown: deterministic.comparisons,
+    aiGenerated: false
+  };
+}
+
 const listOfStrings = (value) => (
   Array.isArray(value)
     ? value.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim()).slice(0, 8)
