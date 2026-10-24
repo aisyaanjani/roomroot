@@ -9,10 +9,59 @@ import {
 } from './matchingEngine.js';
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.set('trust proxy', 1);
+
+const configuredOrigins = (process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const developmentOrigins = process.env.NODE_ENV === 'production'
+  ? []
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const allowedOrigins = new Set([...configuredOrigins, ...developmentOrigins]);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    const error = new Error('Origin is not allowed by CORS.');
+    error.code = 'CORS_ORIGIN_DENIED';
+    return callback(error);
+  }
+}));
 app.use(express.json({ limit: '20kb' }));
 
 const model = 'models/gemma-4-26b-a4b-it';
+const aiRateLimitWindowMs = 60_000;
+const aiRateLimitMax = Math.max(1, Number.parseInt(process.env.AI_RATE_LIMIT_MAX || '10', 10) || 10);
+const aiRateLimitBuckets = new Map();
+
+function limitAiRequests(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || 'unknown';
+  const existing = aiRateLimitBuckets.get(key);
+  const bucket = !existing || existing.resetAt <= now
+    ? { count: 0, resetAt: now + aiRateLimitWindowMs }
+    : existing;
+
+  bucket.count += 1;
+  aiRateLimitBuckets.set(key, bucket);
+  res.set('RateLimit-Limit', String(aiRateLimitMax));
+  res.set('RateLimit-Remaining', String(Math.max(0, aiRateLimitMax - bucket.count)));
+  res.set('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
+
+  if (aiRateLimitBuckets.size > 10_000) aiRateLimitBuckets.clear();
+  if (bucket.count <= aiRateLimitMax) return next();
+
+  res.set('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+  return res.status(429).json({
+    error: 'Too many AI matching requests. Try again later.',
+    code: 'AI_RATE_LIMITED'
+  });
+}
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
 
 function deterministicResponse(deterministic) {
   const matches = deterministic.comparisons.filter((item) => item.matches);
@@ -130,7 +179,7 @@ app.post('/api/match/deterministic', (req, res) => {
   res.json(deterministicResponse(prepared.deterministic));
 });
 
-app.post('/api/match', async (req, res) => {
+app.post('/api/match', limitAiRequests, async (req, res) => {
   const prepared = prepareMatch(req, res);
   if (!prepared) return;
   const { seeker, host, deterministic } = prepared;
@@ -182,6 +231,9 @@ app.post('/api/match', async (req, res) => {
 });
 
 app.use((error, _req, res, next) => {
+  if (error?.code === 'CORS_ORIGIN_DENIED') {
+    return res.status(403).json({ error: 'Origin is not allowed.' });
+  }
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
     return res.status(400).json({ error: 'Request body contains invalid JSON.' });
   }
@@ -192,4 +244,5 @@ app.use((error, _req, res, next) => {
 });
 
 const port = Number(process.env.PORT) || 3001;
-app.listen(port, () => console.log(`RoomRoot AI running at http://localhost:${port}`));
+const host = '0.0.0.0';
+app.listen(port, host, () => console.log(`RoomRoot AI listening on ${host}:${port}`));

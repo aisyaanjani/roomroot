@@ -4,7 +4,7 @@
   "description": "RoomRoot AI lifestyle compatibility API",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "NODE_ENV=production node index.js",
     "dev": "node --watch index.js",
     "test": "node --test"
   },
@@ -12,6 +12,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@google/genai": "^2.31.0",
     "cors": "^2.8.6",
