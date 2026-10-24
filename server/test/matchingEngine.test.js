@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildPrompt, calculateDeterministicMatch, validateAiAnalysis, validateProfiles } from '../matchingEngine.js';
+import {
+  buildPrompt,
+  calculateDeterministicMatch,
+  deterministicResponse,
+  validateAiAnalysis,
+  validateProfiles
+} from '../matchingEngine.js';
 
 const compatibleSeeker = {
   monthlyBudget: 1000,
@@ -42,6 +48,17 @@ test('marks a match ineligible when rent exceeds the budget', () => {
   );
   assert.equal(result.eligible, false);
   assert.match(result.hardConstraints[0], /exceeds/);
+});
+
+test('deterministic fallback is explicitly marked as not AI generated', () => {
+  const deterministic = calculateDeterministicMatch(
+    { ...compatibleSeeker, monthlyBudget: 700 },
+    compatibleHost
+  );
+  const response = deterministicResponse(deterministic);
+  assert.equal(response.aiGenerated, false);
+  assert.equal(response.eligible, false);
+  assert.equal(response.compatibilityScore, deterministic.compatibilityScore);
 });
 
 test('returns a null score when fewer than three fields are comparable', () => {

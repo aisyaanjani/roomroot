@@ -1,6 +1,6 @@
 # Deploy the RoomRoot API to Cloud Run
 
-This guide deploys the existing Express server from source. Cloud Run builds only the contents of `server/`; the website and local `.env` file are not uploaded. The deployment keeps the Gemma model `models/gemma-4-26b-a4b-it` and supplies `GEMINI_API_KEY` from Secret Manager.
+This guide deploys the existing Express server from source. Cloud Run builds only the contents of `server/`; the website and local `.env` file are not uploaded. RoomRoot can use OpenRouter's exact free Gemma 4 model or retain the original Google transport for rollback. Provider keys come only from Secret Manager.
 
 Cloud Run, Cloud Build, Artifact Registry, Secret Manager, and Gemini API usage can consume trial credits. Review the project's Billing reports and set budget alerts before deploying. A budget alert does not automatically cap spending.
 
@@ -96,6 +96,29 @@ gcloud secrets add-iam-policy-binding gemini-api-key \
 
 Cloud Run validates secret access during deployment. The deployer also needs permission to deploy Cloud Run services, use the runtime service account, and perform source builds.
 
+### Add the OpenRouter key without displaying it
+
+Do not place the key in a command argument. Disable shell tracing, read it silently, pipe it directly to Secret Manager, and clear the shell variable:
+
+```bash
+set +x
+gcloud secrets create openrouter-api-key --replication-policy="automatic"
+read -s OPENROUTER_API_KEY_VALUE
+printf '%s' "$OPENROUTER_API_KEY_VALUE" | \
+  gcloud secrets versions add openrouter-api-key --data-file=-
+unset OPENROUTER_API_KEY_VALUE
+```
+
+Grant the existing RoomRoot runtime identity access to only this secret:
+
+```bash
+gcloud secrets add-iam-policy-binding openrouter-api-key \
+  --member="serviceAccount:${SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+Creating or updating a secret and deploying a Cloud Run revision can consume trial credits or incur charges. These commands are preparation only; run them only after explicit approval. Keep the existing `gemini-api-key` secret for optional Google rollback.
+
 ## Deploy from source
 
 Run the deployment from the server directory:
@@ -118,6 +141,18 @@ gcloud run deploy "$SERVICE" \
   --concurrency=10 \
   --timeout=30s
 ```
+
+For the existing deployed `roomroot-api` service, the provider-only configuration change would be:
+
+```bash
+gcloud run services update roomroot-api \
+  --project="gen-lang-client-0420174255" \
+  --region="us-central1" \
+  --update-secrets="OPENROUTER_API_KEY=openrouter-api-key:1" \
+  --update-env-vars="AI_PROVIDER=openrouter,AI_MODEL=google/gemma-4-26b-a4b-it:free"
+```
+
+This creates a new revision of the existing service; it does not create another service. It preserves the service's existing minimum/maximum instances, memory, CPU, CORS, rate limiter, and health endpoint unless those settings are separately changed. Review the current service configuration before executing it. Do not run it without explicit deployment approval.
 
 Replace secret version `1` if the enabled key is stored in another version. Pinning a version makes deployments reproducible; deploy a new revision when rotating it.
 
@@ -149,7 +184,11 @@ Use fictional profiles for an `/api/match` smoke test. Then configure the fronte
 VITE_API_BASE_URL=https://YOUR_CLOUD_RUN_SERVICE_URL
 ```
 
-`VITE_API_BASE_URL` is public configuration. Never create a `VITE_GEMINI_API_KEY` or otherwise place the API key in the frontend.
+`VITE_API_BASE_URL` is public configuration. Never create a `VITE_GEMINI_API_KEY`, `VITE_OPENROUTER_API_KEY`, or otherwise place a provider key in the frontend.
+
+## Monitor free usage
+
+OpenRouter's dashboard and Activity page show requests and model routing. `GET https://openrouter.ai/api/v1/key` reports the current key's free-tier status, usage, and configured credit limit. Never print the response fields that identify the key or account into public logs. A zero credit limit can block requests even to a zero-price model; do not remove that restriction or buy credits without explicit approval. If the free model has no provider capacity, keep the deterministic UI available and retry later rather than selecting another model.
 
 ## CORS and later updates
 

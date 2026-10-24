@@ -2,8 +2,15 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import {
+  describeAiFailure,
+  generateGemmaAnalysis,
+  getAiConfiguration,
+  parseGemmaJson
+} from './aiProvider.js';
+import {
   buildPrompt,
   calculateDeterministicMatch,
+  deterministicResponse,
   validateAiAnalysis,
   validateProfiles
 } from './matchingEngine.js';
@@ -30,7 +37,6 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '20kb' }));
 
-const model = 'models/gemma-4-26b-a4b-it';
 const aiRateLimitWindowMs = 60_000;
 const aiRateLimitMax = Math.max(1, Number.parseInt(process.env.AI_RATE_LIMIT_MAX || '10', 10) || 10);
 const aiRateLimitBuckets = new Map();
@@ -63,104 +69,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-function deterministicResponse(deterministic) {
-  const matches = deterministic.comparisons.filter((item) => item.matches);
-  const mismatches = deterministic.comparisons.filter((item) => !item.matches);
-  return {
-    eligible: deterministic.eligible,
-    compatibilityScore: deterministic.compatibilityScore,
-    summary: deterministic.compatibilityScore === null
-      ? 'More shared profile information is needed for a fair score.'
-      : `Deterministic compatibility is ${deterministic.compatibilityScore}%.`,
-    strengths: matches.map((item) => `Compatible ${item.field}.`),
-    conflicts: mismatches.map((item) => `Different ${item.field}.`),
-    questions: deterministic.discussionItems,
-    missingInformation: deterministic.missingInformation,
-    hardConstraints: deterministic.hardConstraints,
-    dealbreakerConflicts: deterministic.dealbreakerConflicts,
-    discussionItems: deterministic.discussionItems,
-    breakdown: deterministic.comparisons,
-    aiGenerated: false
-  };
-}
-
-async function generateGemmaAnalysis(prompt) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
-  const startedAt = performance.now();
-  const requestPayload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-      maxOutputTokens: 400,
-      thinkingConfig: {
-        thinkingLevel: 'minimal'
-      }
-    }
-  };
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': process.env.GEMINI_API_KEY
-        },
-        body: JSON.stringify(requestPayload),
-        signal: controller.signal
-      }
-    );
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(body?.error?.message || `Google API returned HTTP ${response.status}.`);
-      error.status = response.status;
-      error.apiStatus = body?.error?.status;
-      throw error;
-    }
-
-    const text = body?.candidates?.[0]?.content?.parts
-      ?.filter((part) => part.thought !== true)
-      .map((part) => part.text || '')
-      .join('');
-    if (!text) throw new Error('Gemma returned no text content.');
-    if (process.env.GEMMA_DIAGNOSTICS === '1') {
-      const candidate = body?.candidates?.[0];
-      const usage = body?.usageMetadata || {};
-      console.info('Gemma request metrics:', JSON.stringify({
-        durationSeconds: Number(((performance.now() - startedAt) / 1000).toFixed(3)),
-        requestBytes: Buffer.byteLength(JSON.stringify(requestPayload)),
-        responseBytes: Buffer.byteLength(JSON.stringify(body)),
-        promptTokenCount: usage.promptTokenCount ?? null,
-        candidatesTokenCount: usage.candidatesTokenCount ?? null,
-        thoughtsTokenCount: usage.thoughtsTokenCount ?? null,
-        totalTokenCount: usage.totalTokenCount ?? null,
-        finishReason: candidate?.finishReason ?? null,
-        thoughtPartCount: candidate?.content?.parts?.filter((part) => part.thought === true).length ?? 0
-      }));
-    }
-    return text;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function parseGemmaJson(text) {
-  const withoutThoughts = text
-    .replace(/<\|channel\>thought[\s\S]*?<\|channel\>(?:final)?/gi, '')
-    .replace(/<\|think\|>[\s\S]*?<\|\/think\|>/gi, '')
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .trim();
-  const fencedJson = withoutThoughts.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const source = fencedJson || withoutThoughts;
-  const candidate = source.slice(source.indexOf('{'), source.lastIndexOf('}') + 1);
-  if (!candidate) throw new Error('Gemma did not return a JSON object.');
-  return JSON.parse(candidate);
-}
-
 function prepareMatch(req, res) {
   const validationError = validateProfiles(req.body);
   if (validationError) {
@@ -188,16 +96,24 @@ app.post('/api/match', limitAiRequests, async (req, res) => {
     return res.json(deterministicResponse(deterministic));
   }
 
-  if (!process.env.GEMINI_API_KEY) {
+  let aiConfiguration;
+  try {
+    aiConfiguration = getAiConfiguration();
+  } catch (error) {
+    return res.status(503).json({ error: error.message, code: 'AI_NOT_CONFIGURED' });
+  }
+
+  if (!aiConfiguration.apiKey) {
     return res.status(503).json({
-      error: 'AI matching is not configured. Add GEMINI_API_KEY to server/.env.',
+      error: `AI matching is not configured. Add ${aiConfiguration.requiredKey} to the server environment.`,
       code: 'AI_NOT_CONFIGURED'
     });
   }
 
   try {
     const responseText = await generateGemmaAnalysis(
-      buildPrompt(seeker, host, deterministic)
+      buildPrompt(seeker, host, deterministic),
+      { configuration: aiConfiguration }
     );
     const analysis = validateAiAnalysis(parseGemmaJson(responseText));
     res.json({
@@ -206,27 +122,14 @@ app.post('/api/match', limitAiRequests, async (req, res) => {
       aiGenerated: true
     });
   } catch (error) {
-    console.error('AI request failed:', error.message);
-    const unavailableModel =
-      error.status === 404 || /not found|not supported|model unavailable/i.test(error.message);
-    const timedOut = error.name === 'AbortError' || error.name === 'TimeoutError';
-    const invalidResponse = /JSON object|JSON|no text content/i.test(error.message);
-    res.status(503).json({
-      error: unavailableModel
-        ? `The configured model (${model}) is unavailable for this API key.`
-        : timedOut
-          ? 'The Gemma request timed out after 20 seconds.'
-          : invalidResponse
-            ? 'Gemma returned an invalid compatibility explanation.'
-            : 'Compatibility analysis is temporarily unavailable.',
-      code: unavailableModel
-        ? 'MODEL_UNAVAILABLE'
-        : timedOut
-          ? 'AI_REQUEST_TIMEOUT'
-          : invalidResponse
-            ? 'AI_RESPONSE_INVALID'
-            : 'AI_REQUEST_FAILED'
-    });
+    console.error('AI request failed:', JSON.stringify({
+      provider: aiConfiguration.provider,
+      status: error.status ?? null,
+      apiStatus: error.apiStatus ?? null,
+      type: error.name
+    }));
+    const failure = describeAiFailure(error, aiConfiguration);
+    res.status(failure.status).json({ error: failure.error, code: failure.code });
   }
 });
 
