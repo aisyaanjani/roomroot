@@ -13,6 +13,12 @@
   margin-bottom: 12px;
 }
 
+.rm-breakdown-help {
+  margin: -5px 0 10px;
+  color: var(--rm-muted);
+  font-size: 11px;
+}
+
 .rm-ai-heading {
   display: flex;
   align-items: center;

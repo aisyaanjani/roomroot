@@ -43,6 +43,13 @@ const money = (value: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
 }).format(value)
 
+const priorityLabel = (weight: number) => {
+  if (weight >= 4.5) return 'Top priority'
+  if (weight >= 3.5) return 'High priority'
+  if (weight >= 2.5) return 'Important'
+  return 'Preference'
+}
+
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
   const [state, dispatch] = useReducer(discoveryReducer, initialDiscoveryState)
   const [city, setCity] = useState('All cities')
@@ -230,7 +237,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
                 <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
-                <section><h3>Lifestyle breakdown</h3><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>Weight {item.weight.toFixed(1)}</small></div></div>)}</div></section>
+                <section><h3>Why this score</h3><p className="rm-breakdown-help">Priorities you care about more have a bigger effect on compatibility.</p><div className="rm-breakdown">{result.breakdown.map(item => <div key={item.field} data-match={item.matches}><span>{item.matches ? '✓' : '!'}</span><div><strong>{item.field}</strong><small>{item.matches ? 'Aligned' : 'Different'} · {priorityLabel(item.weight)}</small></div></div>)}</div></section>
                 {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
                 <section className="rm-ai">
