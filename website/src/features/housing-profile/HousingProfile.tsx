@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { amenities, compatibility, createHousingProfile, dealbreakers, headings, housingTypes, lifestyleQuestions, priorityOptions, sections } from './questions'
 import { loadHousingProfile, resetHousingProfile, saveHousingProfile } from './storage'
-import { applyImportedProfile, restoreProfileBeforeImport } from './importProfile'
+import { applyImportedProfile, readImportUndoBackup, restoreProfileBeforeImport } from './importProfile'
 import { ProfileImport } from './ProfileImport'
 import type { AmenityPriority, HousingProfileData, HousingProfileDraft } from './types'
 import { validateSection } from './validation'
@@ -21,7 +21,7 @@ export function HousingProfile() {
   const [errors, setErrors] = useState<string[]>([])
   const [exited, setExited] = useState(false)
   const [resetPending, setResetPending] = useState(false)
-  const [undoImport, setUndoImport] = useState<HousingProfileDraft | null | undefined>(undefined)
+  const [undoImport, setUndoImport] = useState<'available' | 'none' | 'unavailable'>(() => readImportUndoBackup().status)
   const errorBox = useRef<HTMLDivElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
   const draftRef = useRef(draft)
@@ -63,32 +63,36 @@ export function HousingProfile() {
     document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   function replaceWithImport(imported: HousingProfileDraft) {
-    const result = applyImportedProfile(imported, draft, saveHousingProfile)
+    const result = applyImportedProfile(imported, loadHousingProfile(), saveHousingProfile)
     if (!result.ok || !result.draft) {
       setStatus('Unable to save the imported profile in this browser. Your current profile was not changed.')
       return false
     }
-    setUndoImport(result.undo ?? null)
+    setUndoImport(result.undoStatus ?? 'unavailable')
     setDraft(result.draft)
     setExited(false)
     setResetPending(false)
     setErrors([])
-    setStatus('Profile imported and saved on this device.')
+    setStatus(result.undoStatus === 'available'
+      ? 'Profile imported and saved on this device. Undo is available for this browser tab session.'
+      : 'Profile imported and saved on this device. Session storage is unavailable, so this import cannot be undone.')
     window.scrollTo({top:0, behavior:'smooth'})
     return true
   }
   function undoLastImport() {
-    if (undoImport === undefined) return
-    const result = restoreProfileBeforeImport(undoImport, saveHousingProfile)
+    if (undoImport !== 'available') return
+    const result = restoreProfileBeforeImport(saveHousingProfile)
     if (!result.ok || !result.draft) {
       setStatus('Unable to restore the previous profile in this browser.')
       return
     }
     setDraft(result.draft)
-    setUndoImport(undefined)
+    setUndoImport(result.undoStatus === 'unavailable' ? 'unavailable' : 'none')
     setExited(false)
     setErrors([])
-    setStatus('The previous profile has been restored.')
+    setStatus(result.undoStatus === 'unavailable'
+      ? 'The previous profile was restored, but the session backup could not be cleared because session storage is unavailable.'
+      : 'The previous profile has been restored.')
     window.scrollTo({top:0, behavior:'smooth'})
   }
   function fieldProps(key: string, label: string) {
@@ -104,7 +108,7 @@ export function HousingProfile() {
     <div className="hp-main"><div className="hp-progress-label"><span>{step === 6 ? 'Your profile' : `Step ${step+1} of 6`}</span><span>{progress}% complete</span></div><progress max={100} value={progress} aria-label="Questionnaire completion" />
     <ol className="hp-mobile-steps" aria-label="Section completion">{sections.map((name,index)=><li key={name} aria-current={step === index ? 'step' : undefined} data-completed={completedSections.includes(index)}><span aria-hidden="true">{completedSections.includes(index) ? '✓' : index+1}</span><span className="hp-sr">{name}{completedSections.includes(index) ? ', completed' : ''}</span></li>)}</ol>
     <p role="status" className="hp-save-status">{status}</p>
-    {undoImport !== undefined && <p className="hp-undo-import"><button type="button" onClick={undoLastImport}>Undo import</button></p>}
+    {undoImport === 'available' && <p className="hp-undo-import"><button type="button" onClick={undoLastImport}>Undo import</button></p>}
     {step < 6 && <ProfileImport onReplace={replaceWithImport} />}
     {exited ? <section className="hp-panel"><h1 ref={title} tabIndex={-1}>Take your time. We'll be here.</h1><p>Your progress is kept in this browser when storage is available.</p><button className="hp-primary" onClick={() => setExited(false)}>Resume questionnaire</button></section> : <>
     <h1 ref={title} tabIndex={-1}>{step === 6 ? 'My Housing Profile' : headings[step]}</h1><p className="hp-intro">{step === 6 ? 'A picture of your next home, in your own words.' : 'There’s no one-size-fits-all home. Let’s find what matters to you.'}</p>

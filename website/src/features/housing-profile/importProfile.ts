@@ -4,6 +4,7 @@ import { validateSection } from './validation'
 import type { HousingProfileDraft } from './types'
 
 export const MAX_PROFILE_IMPORT_BYTES = 1024 * 1024
+export const PROFILE_IMPORT_UNDO_KEY = 'roomroot:housing-profile:import-undo:v1'
 
 export class ProfileImportError extends Error {
   constructor(message: string) {
@@ -90,25 +91,94 @@ export function createProfileImportPreview(draft: HousingProfileDraft): ProfileI
 export interface ImportApplyResult {
   ok: boolean
   draft?: HousingProfileDraft
-  undo?: HousingProfileDraft | null
+  undoStatus?: 'available' | 'unavailable'
+}
+
+interface SessionStorageLike {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+  removeItem(key: string): void
+}
+
+type UndoRecord = { version: 1; restore: 'fresh' } | { version: 1; restore: 'profile'; profile: HousingProfileDraft }
+export type ImportUndoState =
+  | { status: 'available'; draft: HousingProfileDraft | null }
+  | { status: 'none' | 'unavailable' }
+
+function defaultSessionStorage(): SessionStorageLike | undefined {
+  try { return typeof sessionStorage === 'undefined' ? undefined : sessionStorage } catch { return undefined }
+}
+
+export function readImportUndoBackup(storage = defaultSessionStorage()): ImportUndoState {
+  if (!storage) return { status: 'unavailable' }
+  let raw: string | null
+  try { raw = storage.getItem(PROFILE_IMPORT_UNDO_KEY) } catch { return { status: 'unavailable' } }
+  if (!raw) return { status: 'none' }
+  try {
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid')
+    const record = value as Record<string, unknown>
+    if (record.version !== 1 || !['fresh', 'profile'].includes(String(record.restore))) throw new Error('invalid')
+    if (record.restore === 'fresh' && Object.keys(record).length === 2) return { status: 'available', draft: null }
+    if (record.restore === 'profile' && Object.keys(record).length === 3 && isHousingProfileDraft(record.profile)) {
+      return { status: 'available', draft: cloneDraft(record.profile) }
+    }
+  } catch {
+    // Invalid session data is not an undo point.
+  }
+  try { storage.removeItem(PROFILE_IMPORT_UNDO_KEY) } catch { return { status: 'unavailable' } }
+  return { status: 'none' }
+}
+
+function stageImportUndo(previous: unknown, storage: SessionStorageLike | undefined) {
+  if (!storage) return { status: 'unavailable' as const }
+  let priorRaw: string | null
+  try {
+    priorRaw = storage.getItem(PROFILE_IMPORT_UNDO_KEY)
+    const record: UndoRecord = isHousingProfileDraft(previous)
+      ? { version: 1, restore: 'profile', profile: cloneDraft(previous) }
+      : { version: 1, restore: 'fresh' }
+    storage.setItem(PROFILE_IMPORT_UNDO_KEY, JSON.stringify(record))
+    return { status: 'available' as const, priorRaw }
+  } catch {
+    return { status: 'unavailable' as const }
+  }
+}
+
+function rollbackStagedUndo(storage: SessionStorageLike | undefined, priorRaw: string | null | undefined) {
+  if (!storage || priorRaw === undefined) return
+  try {
+    if (priorRaw === null) storage.removeItem(PROFILE_IMPORT_UNDO_KEY)
+    else storage.setItem(PROFILE_IMPORT_UNDO_KEY, priorRaw)
+  } catch {
+    // The replacement already failed; preserve the current profile and report failure.
+  }
 }
 
 export function applyImportedProfile(
   imported: HousingProfileDraft,
   previous: unknown,
   save: (draft: HousingProfileDraft) => boolean,
+  storage = defaultSessionStorage(),
 ): ImportApplyResult {
-  const undo = isHousingProfileDraft(previous) ? cloneDraft(previous) : null
+  if (!isHousingProfileDraft(imported)) return { ok: false }
   const draft = cloneDraft(imported)
-  if (!save(draft)) return { ok: false }
-  return { ok: true, draft, undo }
+  const staged = stageImportUndo(previous, storage)
+  if (!save(draft)) {
+    rollbackStagedUndo(storage, 'priorRaw' in staged ? staged.priorRaw : undefined)
+    return { ok: false }
+  }
+  return { ok: true, draft, undoStatus: staged.status }
 }
 
 export function restoreProfileBeforeImport(
-  undo: HousingProfileDraft | null,
   save: (draft: HousingProfileDraft) => boolean,
+  storage = defaultSessionStorage(),
 ): ImportApplyResult {
-  const draft = undo ? cloneDraft(undo) : createHousingProfile()
+  const backup = readImportUndoBackup(storage)
+  if (backup.status !== 'available') return { ok: false, undoStatus: backup.status === 'unavailable' ? 'unavailable' : undefined }
+  const draft = backup.draft ? cloneDraft(backup.draft) : createHousingProfile()
   if (!save(draft)) return { ok: false }
-  return { ok: true, draft }
+  try { storage?.removeItem(PROFILE_IMPORT_UNDO_KEY) } catch { return { ok: true, draft, undoStatus: 'unavailable' } }
+  return { ok: true, draft, undoStatus: 'available' }
 }

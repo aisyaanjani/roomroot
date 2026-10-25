@@ -7,7 +7,9 @@ import {
   createProfileImportPreview,
   MAX_PROFILE_IMPORT_BYTES,
   parseHousingProfileJson,
+  PROFILE_IMPORT_UNDO_KEY,
   ProfileImportError,
+  readImportUndoBackup,
   restoreProfileBeforeImport,
   validateProfileFile,
 } from '../importProfile.ts'
@@ -28,6 +30,15 @@ function completeProfile(): HousingProfileDraft {
 
 function expectImportError(run: () => unknown, pattern: RegExp) {
   assert.throws(run, (error: unknown) => error instanceof ProfileImportError && pattern.test(error.message))
+}
+
+function memorySessionStorage() {
+  const values = new Map<string, string>()
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value) },
+    removeItem: (key: string) => { values.delete(key) },
+  }
 }
 
 test('export/import round trip preserves a valid profile', () => {
@@ -94,38 +105,59 @@ test('normalizes a complete valid profile to the review screen', () => {
   assert.equal(createProfileImportPreview(imported).completionPercentage, 100)
 })
 
-test('preview and cancel do not write until replacement is confirmed', () => {
-  const imported = parseHousingProfileJson(JSON.stringify(completeProfile()))
-  let writes = 0
-  createProfileImportPreview(imported)
-  let pending: HousingProfileDraft | null = imported
-  pending = null
-  assert.equal(pending, null)
-  assert.equal(writes, 0)
-  const result = applyImportedProfile(imported, createHousingProfile(), draft => { writes++; return Boolean(draft) })
-  assert.equal(result.ok, true)
-  assert.equal(writes, 1)
-})
-
-test('undo restores an existing valid profile', () => {
+test('session backup survives remount and undo restores an existing profile', () => {
+  const storage = memorySessionStorage()
   const previous = createHousingProfile()
   previous.profile.housingBasics.city = 'Roanoke'
   const imported = completeProfile()
-  const applied = applyImportedProfile(imported, previous, () => true)
-  const restored = restoreProfileBeforeImport(applied.undo ?? null, () => true)
+  const applied = applyImportedProfile(imported, previous, () => true, storage)
+  assert.equal(applied.undoStatus, 'available')
+  const remounted = readImportUndoBackup(storage)
+  assert.equal(remounted.status, 'available')
+  assert.equal(remounted.status === 'available' && remounted.draft?.profile.housingBasics.city, 'Roanoke')
+  const restored = restoreProfileBeforeImport(() => true, storage)
   assert.equal(restored.draft?.profile.housingBasics.city, 'Roanoke')
+  assert.equal(storage.getItem(PROFILE_IMPORT_UNDO_KEY), null)
+  assert.equal(readImportUndoBackup(storage).status, 'none')
 })
 
-test('undo restores a fresh profile when no valid previous profile exists', () => {
-  const applied = applyImportedProfile(completeProfile(), { invalid: true }, () => true)
-  assert.equal(applied.undo, null)
-  const restored = restoreProfileBeforeImport(applied.undo ?? null, () => true)
+test('undo marker restores a fresh profile when no valid previous profile exists', () => {
+  const storage = memorySessionStorage()
+  assert.equal(applyImportedProfile(completeProfile(), { invalid: true }, () => true, storage).ok, true)
+  assert.deepEqual(readImportUndoBackup(storage), { status: 'available', draft: null })
+  const restored = restoreProfileBeforeImport(() => true, storage)
   assert.deepEqual(restored.draft?.profile, createHousingProfile().profile)
   assert.equal(restored.draft?.step, 0)
 })
 
-test('storage write failure leaves replacement and undo unapplied', () => {
+test('unavailable session storage does not block import and reports undo unavailable', () => {
+  const unavailable = { getItem() { throw Error('blocked') }, setItem() { throw Error('blocked') }, removeItem() { throw Error('blocked') } }
+  const applied = applyImportedProfile(completeProfile(), createHousingProfile(), () => true, unavailable)
+  assert.equal(applied.ok, true)
+  assert.equal(applied.undoStatus, 'unavailable')
+  assert.equal(readImportUndoBackup(unavailable).status, 'unavailable')
+})
+
+test('failed replacement preserves the prior undo backup', () => {
+  const storage = memorySessionStorage()
   const previous = createHousingProfile()
-  assert.deepEqual(applyImportedProfile(completeProfile(), previous, () => false), { ok: false })
-  assert.deepEqual(restoreProfileBeforeImport(previous, () => false), { ok: false })
+  previous.profile.housingBasics.city = 'First backup'
+  assert.equal(applyImportedProfile(completeProfile(), previous, () => true, storage).ok, true)
+  const priorBackup = storage.getItem(PROFILE_IMPORT_UNDO_KEY)
+  const newer = createHousingProfile(); newer.profile.housingBasics.city = 'Must not replace backup'
+  assert.deepEqual(applyImportedProfile(completeProfile(), newer, () => false, storage), { ok: false })
+  assert.equal(storage.getItem(PROFILE_IMPORT_UNDO_KEY), priorBackup)
+  assert.deepEqual(applyImportedProfile({ invalid: true } as unknown as HousingProfileDraft, newer, () => true, storage), { ok: false })
+  assert.equal(storage.getItem(PROFILE_IMPORT_UNDO_KEY), priorBackup)
+})
+
+test('profile write failure and undo write failure preserve recoverable state', () => {
+  const storage = memorySessionStorage()
+  const previous = createHousingProfile()
+  assert.deepEqual(applyImportedProfile(completeProfile(), previous, () => false, storage), { ok: false })
+  assert.equal(storage.getItem(PROFILE_IMPORT_UNDO_KEY), null)
+  assert.equal(applyImportedProfile(completeProfile(), previous, () => true, storage).ok, true)
+  const backup = storage.getItem(PROFILE_IMPORT_UNDO_KEY)
+  assert.deepEqual(restoreProfileBeforeImport(() => false, storage), { ok: false })
+  assert.equal(storage.getItem(PROFILE_IMPORT_UNDO_KEY), backup)
 })
