@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createHousingProfile, sections } from '../questions.ts'
+import { createHousingProfile, leaseOptions, sections } from '../questions.ts'
 import {
   applyImportedProfile,
   createProfileImportPreview,
@@ -18,7 +18,7 @@ import type { HousingProfileDraft } from '../types.ts'
 function completeProfile(): HousingProfileDraft {
   const draft = createHousingProfile()
   Object.assign(draft.profile.housingBasics, {
-    city: 'Blacksburg', state: 'VA', transportation: 'Walking', moveInDate: '2027-08-15', lease: '12 months',
+    city: 'Blacksburg', state: 'VA', transportation: 'Walking', moveInDate: '2027-08-15', lease: '12-month lease',
   })
   draft.profile.propertyPreferences.housingTypes = ['Apartment']
   draft.profile.priorities.ranked = ['Affordability', 'Distance to campus/work', 'Walkability', 'Quiet environment', 'Roommate compatibility']
@@ -44,6 +44,34 @@ function memorySessionStorage() {
 test('export/import round trip preserves a valid profile', () => {
   const draft = completeProfile()
   assert.deepEqual(parseHousingProfileJson(JSON.stringify(draft)), draft)
+})
+
+test('migrates legacy lease values explicitly and preserves custom Other text', () => {
+  const legacyTwelveMonths = completeProfile()
+  legacyTwelveMonths.profile.housingBasics.lease = '12 months'
+  assert.equal(parseHousingProfileJson(JSON.stringify(legacyTwelveMonths)).profile.housingBasics.lease, '12-month lease')
+
+  for (const lease of ['Semester', '6 months']) {
+    const legacy = completeProfile()
+    legacy.profile.housingBasics.lease = lease
+    assert.equal(parseHousingProfileJson(JSON.stringify(legacy)).profile.housingBasics.lease, lease)
+  }
+
+  const custom = completeProfile()
+  custom.profile.housingBasics.lease = 'Other'
+  custom.profile.housingBasics.otherLease = 'A custom 8-month arrangement'
+  const imported = parseHousingProfileJson(JSON.stringify(custom))
+  assert.equal(imported.profile.housingBasics.lease, 'Other')
+  assert.equal(imported.profile.housingBasics.otherLease, 'A custom 8-month arrangement')
+})
+
+test('accepts every new lease option in a strict import round trip', () => {
+  for (const lease of leaseOptions) {
+    const draft = completeProfile()
+    draft.profile.housingBasics.lease = lease
+    if (lease === 'Other') draft.profile.housingBasics.otherLease = '9 months'
+    assert.deepEqual(parseHousingProfileJson(JSON.stringify(draft)), draft, lease)
+  }
 })
 
 test('rejects malformed JSON without exposing its contents', () => {
@@ -87,7 +115,7 @@ test('keeps an incomplete profile at its imported step and previews progress', (
   const draft = createHousingProfile()
   draft.step = 2
   draft.completedSections = [0, 1]
-  Object.assign(draft.profile.housingBasics, { city: 'Blacksburg', state: 'VA', transportation: 'Walking', moveInDate: '2027-08-15', lease: '12 months' })
+  Object.assign(draft.profile.housingBasics, { city: 'Blacksburg', state: 'VA', transportation: 'Walking', moveInDate: '2027-08-15', lease: '12-month lease' })
   draft.profile.propertyPreferences.housingTypes = ['Apartment']
   const imported = parseHousingProfileJson(JSON.stringify(draft))
   assert.equal(imported.completed, false)

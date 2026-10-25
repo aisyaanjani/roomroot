@@ -33,10 +33,26 @@ test('creates the seeker and host API payload from two questionnaire profiles', 
   seeker.housingBasics.state = ''
   host.housingBasics.city = 'Cambridge'
   host.housingBasics.state = ''
-  host.housingBasics.lease = '12 months'
+  host.housingBasics.lease = '12-month lease'
   const request = createMatchingRequest(seeker, host)
   assert.equal(request.seeker.location, 'Boston')
   assert.equal(request.host.location, 'Cambridge')
   assert.equal(request.host.minimumLeaseMonths, 12)
   assert.equal(request.host.maximumLeaseMonths, 12)
 });
+
+test('maps the new lease choices through the existing normalized duration field', () => {
+  const profile = createHousingProfile().profile
+  const cases: Array<[string, number]> = [
+    ['Spring semester', 4],
+    ['Summer sublet', 3],
+    ['Fall semester', 4],
+    ['Academic year', 9],
+    ['12-month lease', 12],
+    ['Month-to-month', 1],
+  ]
+  for (const [lease, months] of cases) {
+    profile.housingBasics.lease = lease
+    assert.equal(adaptHousingProfile(profile).leaseDurationMonths, months, lease)
+  }
+})

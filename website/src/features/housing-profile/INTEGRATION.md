@@ -44,7 +44,13 @@ A structurally valid draft can still lack required answers or have inconsistent 
 
 The questionnaire exports and imports local JSON backups. Import enforces a 1 MB limit, accepts `.json` files only, parses entirely in the browser, passes data through `migrateHousingProfile`, and requires the strict `isHousingProfileDraft` contract before showing a preview. Nothing is written until the user confirms replacement. Immediately before replacement, the previous valid profile (or a fresh-profile marker) is stored under `roomroot:housing-profile:import-undo:v1` in `sessionStorage`; successful undo clears it. If session storage is unavailable, replacement still works and the UI says that undo is unavailable. TypeScript interfaces alone do not validate runtime input.
 
-Version 1 remains the storage and export version. On load or import, the explicit v1 migration normalizes a recognized state name/code (ignoring case and surrounding whitespace) to its two-letter code and adds an empty `commuteArea` only when that field is absent. It does not replace a valid returning user's state or city. Unknown states remain invalid and are rejected by the strict contract. New profiles default to `VA`. Location suggestions are static, local search aids and never make a network request.
+Version 1 remains the storage and export version. On load or import, the explicit v1 migration normalizes a recognized state name/code (ignoring case and surrounding whitespace) to its two-letter code and adds an empty `commuteArea` only when that field is absent. It does not replace a valid returning user's state or city. Unknown states remain invalid and are rejected by the strict contract. New profiles leave location unanswered. Location suggestions are static, local search aids and never make a network request.
+
+The questionnaire displays its estimated completion time, explains local autosave and backup export, and keeps optional answers optional. Completed sections can be revisited; moving forward requires validating each intervening section. Section transitions focus the new heading. Use the review screen to distinguish blocking required/numeric errors from non-blocking suggestions.
+
+Minimum expected rent must not exceed maximum affordable rent. Maximum total monthly housing cost, including utilities, must be at least maximum affordable rent. Numeric inputs must be finite and nonnegative; validation does not rewrite entered values. Importance ratings remain integers from 1 to 5 (default 3), and are separate from dealbreakers.
+
+Lease choices for new profiles are Spring semester, Summer sublet, Fall semester, Academic year, 12-month lease, Month-to-month, and Other. V1 migration maps `12 months` to `12-month lease`; `Semester` is retained and prompts a non-blocking review rather than inferring a term; `6 months` and custom `Other` text remain intact. The strict import contract accepts these legacy V1 values so existing backups remain usable.
 
 ## Housing search access
 
@@ -317,8 +323,8 @@ Use exported question definitions as the source of truth. All categorical fields
 | --- | --- |
 | transportation | Walking; Biking; Public transit; Driving |
 | utilities | Yes; No; No preference |
-| budgetFlexible, dateFlexible | Yes; No; Somewhat |
-| lease | Month-to-month; Semester; 6 months; 12 months; Other |
+| budgetFlexible, dateFlexible | Yes; No; Somewhat; No preference |
+| lease | Spring semester; Summer sublet; Fall semester; Academic year; 12-month lease; Month-to-month; Other; legacy Semester and 6 months |
 | bedroom, bathroom | Private; Shared; No preference |
 | furnishing | Furnished; Partially furnished; Unfurnished; No preference |
 | floor | Ground floor; Lower floors; Upper floors; No preference |

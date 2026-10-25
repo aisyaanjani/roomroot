@@ -2,6 +2,7 @@ import type { HousingProfileDraft, Lifestyle } from './types'
 export const sections = ['Housing basics', 'Your ideal home', 'Amenities', 'Your lifestyle', 'Roommate preferences', 'Personal priorities']
 export const headings = ["Let's find a place that feels like home.", 'What does your ideal home look like?', 'What makes a space feel like yours?', 'Tell us what living with you is like.', 'What matters most in a roommate?', "Let's make your search yours."]
 export const housingTypes = ['Apartment', 'House', 'Townhouse', 'Studio', 'Shared house', 'Student housing']
+export const leaseOptions = ['Spring semester', 'Summer sublet', 'Fall semester', 'Academic year', '12-month lease', 'Month-to-month', 'Other']
 export const amenities = [
   ['❄', 'Central air conditioning'], ['☀', 'Heating'], ['✣', 'Ceiling fans'], ['◒', 'Natural lighting'],
   ['◇', 'Dishwasher'], ['♧', 'Full kitchen'], ['▣', 'Refrigerator'], ['♨', 'Oven/stove'], ['▤', 'Microwave'],
@@ -29,8 +30,8 @@ export const dealbreakers = ['Smoking indoors','Pets in the home','Frequent over
 export const priorityOptions = ['Affordability','Distance to campus/work','Walkability','Public transportation','Apartment size','Private bathroom','In-unit laundry','Pet-friendly housing','Parking','Natural lighting','Quiet environment','Accessibility','Amenities','Roommate compatibility']
 export function createHousingProfile(): HousingProfileDraft {
   return { version:1, step:0, completed:false, updatedAt:new Date().toISOString(), profile:{
-    housingBasics:{city:'',state:'VA',neighborhoods:'',proximity:'',commuteArea:'',commute:30,transportation:'',minRent:500,maxRent:1500,totalBudget:1800,utilities:'',budgetFlexible:'',moveInDate:'',dateFlexible:'',lease:'',otherLease:''},
-    propertyPreferences:{housingTypes:[],bedrooms:1,bathrooms:1,bedroom:'',bathroom:'',squareFootage:0,furnishing:'',floor:'',elevator:'',roommates:1,entrance:'',outdoor:''},
+    housingBasics:{city:'',state:'',neighborhoods:'',proximity:'',commuteArea:'',commute:30,transportation:'',minRent:500,maxRent:1500,totalBudget:1800,utilities:'',budgetFlexible:'',moveInDate:'',dateFlexible:'',lease:'',otherLease:''},
+    propertyPreferences:{housingTypes:[],bedrooms:0,bathrooms:0,bedroom:'',bathroom:'',squareFootage:0,furnishing:'',floor:'',elevator:'',roommates:0,entrance:'',outdoor:''},
     amenities:Object.fromEntries(amenities.map(([,name])=>[name,"Don't care"])),
     lifestyle:{sleep:'',cleanliness:'',noise:'',social:'',guests:'',overnight:'',work:'',smoking:'',pets:'',groceries:'',cleaning:'',communication:''},
     roommatePreferences:{importance:Object.fromEntries(compatibility.map(name=>[name,3])),dealbreakers:[]}, priorities:{ranked:[],flexible:[]}
