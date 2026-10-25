@@ -231,6 +231,22 @@
 
 .rm-structural-filters label { margin-bottom: 14px; }
 
+.rm-pill-field {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.rm-pill-field legend {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rm-pill-field > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.rm-pill-field button { padding: 6px 8px; border: 1px solid #cbd3c6; border-radius: 999px; background: #fff; color: var(--rm-ink); font-size: 10px; }
+.rm-pill-field button[aria-pressed=true] { border-color: var(--rm-forest); background: var(--rm-forest); color: white; }
+
 .rm-more-filters summary {
   margin-bottom: 16px;
   color: var(--rm-forest);
@@ -325,6 +341,36 @@
   gap: 10px;
 }
 
+.rm-analysis-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: #edf0e8;
+}
+
+.rm-analysis-tabs button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rm-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rm-analysis-tabs button[aria-selected=true] {
+  background: #fffefa;
+  color: var(--rm-forest);
+  box-shadow: 0 2px 8px #214c3a16;
+}
+
+.rm-tab-panel { min-height: 0; }
+.rm-ai-editorial { margin-top: 0 !important; padding: 18px; border: 1px solid #cfdcca; border-radius: 16px; background: #eaf1e7; }
+.rm-ai-editorial .rm-conversation-card { background: #fffefa; }
+
 .rm-domain-scores > div {
   padding: 10px;
   border-radius: 10px;
@@ -371,7 +417,7 @@
   .roommate-matching { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
   .rm-header { flex: 0 0 74px; }
   .rm-shell { flex: 1 1 auto; width: 100%; min-height: 0; }
-  .rm-filters { height: 100%; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+  .rm-filters { height: 100%; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 66px; }
   .rm-stats { position: sticky; bottom: -42px; margin-top: 20px; padding: 18px 0 42px; background: #eef1e7; }
   .rm-content { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
   .rm-heading { flex: 0 0 auto; width: 100%; }

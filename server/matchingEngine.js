@@ -66,6 +66,10 @@ const valuesMatch = (field, left, right) => {
   if (field === 'pet preferences') {
     return new Set([a, b]).has('have pets') && new Set([a, b]).has('comfortable with pets');
   }
+  if (field === 'smoking preferences') {
+    const smokeFree = new Set(['non-smoker', 'prefer smoke-free home']);
+    return smokeFree.has(a) && smokeFree.has(b);
+  }
   return false;
 };
 

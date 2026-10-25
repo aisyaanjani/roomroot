@@ -41,6 +41,14 @@ test('scores conflicting preferences deterministically', () => {
   assert.equal(result.compatibilityScore, 60);
 });
 
+test('treats non-smoker and smoke-free-home preference as aligned', () => {
+  const result = calculateDeterministicMatch(
+    { location: 'Blacksburg', sleepSchedule: 'Early bird', cleanliness: 'Tidy', smokingPreferences: 'Prefer smoke-free home' },
+    { location: 'Blacksburg', sleepSchedule: 'Early bird', cleanliness: 'Tidy', smokingPreferences: 'Non-smoker' }
+  );
+  assert.equal(result.comparisons.find((item) => item.field === 'smoking preferences')?.matches, true);
+});
+
 test('marks a match ineligible when rent exceeds the budget', () => {
   const result = calculateDeterministicMatch(
     { ...compatibleSeeker, monthlyBudget: 700 },

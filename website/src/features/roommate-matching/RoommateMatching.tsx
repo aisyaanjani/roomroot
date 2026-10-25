@@ -92,6 +92,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [deterministic, setDeterministic] = useState<Record<string, MatchResult>>({})
   const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<Record<string, AiState>>({})
+  const [analysisTab, setAnalysisTab] = useState<'compatibility' | 'guide'>('compatibility')
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null)
   const startedMatches = useRef(new Set<string>())
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
@@ -185,8 +186,13 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
     return () => window.clearTimeout(timer)
   }, [aiState, candidate, currentProfile, requestAiInsights, result])
 
-  function resetDeck() { dispatch({ type: 'reset' }) }
-  function updateFilter(update: () => void) { update(); dispatch({ type: 'rewind' }) }
+  function resetDeck() { setAnalysisTab('compatibility'); dispatch({ type: 'reset' }) }
+  function updateFilter(update: () => void) { update(); setAnalysisTab('compatibility'); dispatch({ type: 'rewind' }) }
+  function openGuide() {
+    if (!candidate) return
+    setAnalysisTab('guide')
+    if (!aiState) void requestAiInsights(candidate)
+  }
   function saveCandidate() {
     if (!candidate) return
     dispatch({ type: 'save', id: candidate.id })
@@ -197,6 +203,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
     setSwipeDirection(action === 'pass' ? 'left' : 'right')
     window.setTimeout(() => {
       dispatch({ type: action, id: candidate.id })
+      setAnalysisTab('compatibility')
       setSwipeDirection(null)
     }, 180)
   }
@@ -231,8 +238,8 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
         <label>Move in by<input type="date" value={moveInBy} onChange={event => updateFilter(() => setMoveInBy(event.target.value))} /></label>
         <label>Housing preference<select value={housingType} onChange={event => updateFilter(() => setHousingType(event.target.value))}>{housingTypes.map(value => <option key={value}>{value}</option>)}</select></label>
         <div className="rm-structural-filters"><p className="rm-kicker">BLACKSBURG HOUSING FIT</p>
-          <label>What do you need?<select value={searchMode} onChange={event => updateFilter(() => setSearchMode(event.target.value))}>{['Any search mode','Has open room','Needs a room','Team up for a lease'].map(value => <option key={value}>{value}</option>)}</select></label>
-          <label>Total unrelated occupants<select value={occupancyCap} onChange={event => updateFilter(() => setOccupancyCap(event.target.value))}>{['Any household size','2','3','4'].map(value => <option key={value} value={value}>{value === 'Any household size' ? value : `${value} people`}</option>)}</select></label>
+          <fieldset className="rm-pill-field"><legend>What do you need?</legend><div>{[['Any search mode','Any'],['Has open room','Has room'],['Needs a room','Needs room'],['Team up for a lease','Team up']].map(([value,label]) => <button type="button" key={value} aria-pressed={searchMode === value} onClick={() => updateFilter(() => setSearchMode(value))}>{label}</button>)}</div></fieldset>
+          <fieldset className="rm-pill-field"><legend>Total unrelated occupants</legend><div>{[['Any household size','Any'],['2','2 max'],['3','3 max'],['4','4 max']].map(([value,label]) => <button type="button" key={value} aria-pressed={occupancyCap === value} onClick={() => updateFilter(() => setOccupancyCap(value))}>{label}</button>)}</div></fieldset>
           <label>Campus commute<select value={transitCorridor} onChange={event => updateFilter(() => setTransitCorridor(event.target.value))}>{['Any commute corridor','Walk or bike','Hethwood','Toms Creek / UCB','North Main','South Main','Christiansburg'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Lease cycle<select value={academicTerm} onChange={event => updateFilter(() => setAcademicTerm(event.target.value))}>{['Any lease term','Spring 2027','Fall 2027','Academic year','12-month lease','Sublet'].map(value => <option key={value}>{value}</option>)}</select></label>
           <label className="rm-check"><input type="checkbox" checked={privateBathroom} onChange={event => updateFilter(() => setPrivateBathroom(event.target.checked))} /> Private bathroom required</label>
@@ -251,7 +258,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
       </aside>
 
       <div className="rm-content">
-        <div className="rm-heading"><div><p className="rm-kicker">YOUR COMPATIBILITY DECK</p><h1>Meet your next roommate.</h1></div><button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!state.history.length}>↶ Undo</button></div>
+        <div className="rm-heading"><div><p className="rm-kicker">YOUR COMPATIBILITY DECK</p><h1>Meet your next roommate.</h1></div><button type="button" onClick={() => { setAnalysisTab('compatibility'); dispatch({ type: 'undo' }) }} disabled={!state.history.length}>↶ Undo</button></div>
 
         {!candidate ? <section className="rm-empty"><span aria-hidden="true">🌿</span><h2>You’ve reached the end of this deck.</h2><p>Adjust your filters or review the fictional profiles again.</p><button type="button" onClick={resetDeck}>Restart deck</button></section> :
           <article className={`rm-card${swipeDirection ? ` is-swiping-${swipeDirection}` : ''}`} tabIndex={0} aria-label={`${candidate.name} roommate match. Swipe or use arrow keys to decide.`} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onKeyDown={event => { if (event.key === 'ArrowLeft') swipe('pass'); if (event.key === 'ArrowRight') swipe('like') }}>
@@ -277,12 +284,17 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                 <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
                 <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
-                <section className="rm-domain-scores" aria-label="Compatibility score breakdown">{([['Lease & logistics', domainScore(result.breakdown, true)], ['Daily living rhythm', domainScore(result.breakdown, false)]] as const).map(([label, score]) => <div key={label}><div><strong>{label}</strong><span>{score.matched}/{score.total} aligned · {score.percent}%</span></div><progress max="100" value={score.percent}>{score.percent}%</progress></div>)}</section>
-                <details className="rm-score-explainer" open><summary>How RoomRoot calculated {result.compatibilityScore === null ? 'this match' : `${result.compatibilityScore}%`}</summary><ol><li><strong>Check must-haves.</strong> Budget, dates, lease needs, and stated dealbreakers come first.</li><li><strong>Compare shared answers.</strong> RoomRoot checks lifestyle and housing expectations both people answered.</li><li><strong>Respect your priorities.</strong> Cleanliness or quiet matters more when you marked it as important.</li><li><strong>Calculate the score.</strong> Aligned priority points ÷ all comparable priority points. AI does not set or change the percentage.</li></ol></details>
-                {!!result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).length && <section className="rm-mirror"><div className="rm-mirror-title"><div><p className="rm-kicker">EXPECTATION MIRROR</p><h3>Routines to coordinate</h3></div><span>Discuss first</span></div><p>Important differences, shown once and side by side.</p><div className="rm-mirror-grid">{result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).map(item => <article key={item.field}><strong>{item.field}</strong><div><span>You</span><b>{answerLabel(item.seekerValue)}</b></div><div><span>{candidate.name.split(' ')[0]}</span><b>{answerLabel(item.hostValue)}</b></div><small>{priorityLabel(item.weight)} for this match</small></article>)}</div></section>}
-                <section className="rm-ai">
+                <div className="rm-analysis-tabs" role="tablist" aria-label="Match details"><button type="button" role="tab" aria-selected={analysisTab === 'compatibility'} onClick={() => setAnalysisTab('compatibility')}>Compatibility & rhythm</button><button type="button" role="tab" aria-selected={analysisTab === 'guide'} onClick={openGuide}>Coffee chat & house rules ✨</button></div>
+                {analysisTab === 'compatibility' ? <div role="tabpanel" className="rm-tab-panel">
+                  <section className="rm-domain-scores" aria-label="Compatibility score breakdown">{([['Lease & logistics', domainScore(result.breakdown, true)], ['Daily living rhythm', domainScore(result.breakdown, false)]] as const).map(([label, score]) => <div key={label}><div><strong>{label}</strong><span>{score.matched}/{score.total} aligned · {score.percent}%</span></div><progress max="100" value={score.percent}>{score.percent}%</progress></div>)}</section>
+                  <details className="rm-score-explainer"><summary>ⓘ How RoomRoot calculated {result.compatibilityScore === null ? 'this match' : `${result.compatibilityScore}%`}</summary><ol><li><strong>Check must-haves.</strong> Budget, dates, lease needs, and stated dealbreakers come first.</li><li><strong>Compare shared answers.</strong> RoomRoot checks lifestyle and housing expectations both people answered.</li><li><strong>Respect your priorities.</strong> Cleanliness or quiet matters more when you marked it as important.</li><li><strong>Calculate the score.</strong> Aligned priority points ÷ all comparable priority points. AI does not set or change the percentage.</li></ol></details>
+                  {!!result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).length && <section className="rm-mirror"><div className="rm-mirror-title"><div><p className="rm-kicker">EXPECTATION MIRROR</p><h3>Routines to coordinate</h3></div><span>Discuss first</span></div><p>Important differences, shown once and side by side.</p><div className="rm-mirror-grid">{result.breakdown.filter(item => !item.matches && item.weight >= 2.5 && item.seekerValue !== undefined && item.hostValue !== undefined).map(item => <article key={item.field}><strong>{item.field}</strong><div><span>You</span><b>{answerLabel(item.seekerValue)}</b></div><div><span>{candidate.name.split(' ')[0]}</span><b>{answerLabel(item.hostValue)}</b></div><small>{priorityLabel(item.weight)} for this match</small></article>)}</div></section>}
+                  <details className="rm-aligned"><summary>See all aligned traits ({result.breakdown.filter(item => item.matches).length})</summary><div className="rm-aligned-chips">{result.breakdown.filter(item => item.matches).map(item => <span key={item.field}>✓ {item.field}</span>)}</div></details>
+                  {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
+                  {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
+                </div> : <section className="rm-ai rm-ai-editorial" role="tabpanel">
                   <div className="rm-ai-heading"><div><p className="rm-kicker">LIVING TOGETHER GUIDE · POWERED BY GEMMA</p><h3>How routines fit & what to ask before leasing</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
-                  {!aiState && <div className="rm-guide-prompt"><p>Want a custom breakdown and three questions to ask {candidate.name.split(' ')[0]}?</p><button type="button" onClick={() => void requestAiInsights(candidate)}>Generate match guide</button></div>}
+                  {!aiState && <div className="rm-ai-loading" role="status"><span />Preparing questions for your coffee chat with {candidate.name.split(' ')[0]}…</div>}
                   {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Building your living-together guide…</div>}
                   {aiState?.status === 'unavailable' && <><div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{fallbackQuestions(result.breakdown).map(item => <li key={item}>{item}</li>)}</ul></div><button className="rm-refresh-link" type="button" onClick={() => void requestAiInsights(candidate)}>↻ Refresh custom guide</button></>}
                   {aiState?.status === 'success' && aiState.result && <>
@@ -294,10 +306,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                     {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
                     <details className="rm-ai-disclosure"><summary>What Gemma does here</summary><p>Gemma translates the comparison into conversation prompts. It does not rate people, change the score, verify identity, or certify safety.</p></details>
                   </>}
-                </section>
-                <details className="rm-aligned"><summary>See all aligned traits ({result.breakdown.filter(item => item.matches).length})</summary><div className="rm-aligned-chips">{result.breakdown.filter(item => item.matches).map(item => <span key={item.field}>✓ {item.field}</span>)}</div></details>
-                {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
-                {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
+                </section>}
               </>}
             </div>
             <footer className="rm-actions">
