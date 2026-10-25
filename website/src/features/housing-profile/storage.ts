@@ -1,4 +1,4 @@
-import { compatibility, createHousingProfile, dealbreakers, housingTypes, lifestyleQuestions, priorityOptions } from './questions'
+import { compatibility, createHousingProfile, dealbreakers, housingTypes, leaseOptions, lifestyleQuestions, priorityOptions } from './questions'
 import { validateSection } from './validation'
 import type { HousingProfileDraft } from './types'
 import { COMMUTE_AREAS, isStateCode } from './locationData'
@@ -34,7 +34,7 @@ export function isHousingProfileDraft(value: unknown): value is HousingProfileDr
   const selections: [string, string[]][] = [
     [b.transportation, ['Walking','Biking','Public transit','Driving']],
     [b.utilities, ['Yes','No','No preference']], [b.budgetFlexible, ['Yes','No','Somewhat']],
-    [b.dateFlexible, ['Yes','No','Somewhat']], [b.lease, ['Month-to-month','Semester','6 months','12 months','Other']],
+    [b.dateFlexible, ['Yes','No','Somewhat','No preference']], [b.lease, [...leaseOptions, 'Semester', '6 months']],
     [h.bedroom, ['Private','Shared','No preference']], [h.bathroom, ['Private','Shared','No preference']],
     [h.furnishing, ['Furnished','Partially furnished','Unfurnished','No preference']],
     [h.floor, ['Ground floor','Lower floors','Upper floors','No preference']],

@@ -38,7 +38,7 @@ try {
   await evaluate("localStorage.clear();sessionStorage.clear();location.reload()")
   await waitFor('!!document.querySelector(".hp-import-trigger")')
 
-  const profile = await evaluate(`(async()=>{const module=await import('/src/features/housing-profile/questions.ts');const draft=module.createHousingProfile();draft.step=1;draft.completedSections=[0];Object.assign(draft.profile.housingBasics,{city:'Blacksburg',state:'VA',transportation:'Walking',moveInDate:'2027-08-15',lease:'12 months'});return JSON.stringify(draft)})()`)
+  const profile = await evaluate(`(async()=>{const module=await import('/src/features/housing-profile/questions.ts');const draft=module.createHousingProfile();draft.step=1;draft.completedSections=[0];Object.assign(draft.profile.housingBasics,{city:'Blacksburg',state:'VA',transportation:'Walking',moveInDate:'2027-08-15',lease:'12-month lease'});return JSON.stringify(draft)})()`)
 
   await upload(profile)
   await waitFor('!!document.querySelector(".hp-import-preview")')

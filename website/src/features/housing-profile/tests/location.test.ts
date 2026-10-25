@@ -13,8 +13,8 @@ test('all states and DC have unique abbreviations', () => {
   assert.equal(US_STATES.some(([code, name]) => code === 'DC' && name === 'Washington, D.C.'), true)
 })
 
-test('new profiles default to Virginia and migration preserves valid profiles', () => {
-  assert.equal(createHousingProfile().profile.housingBasics.state, 'VA')
+test('new profiles leave location unspecified and migration preserves valid profiles', () => {
+  assert.equal(createHousingProfile().profile.housingBasics.state, '')
   for (const [legacy, expected] of [['Virginia', 'VA'], [' va ', 'VA'], ['VA', 'VA'], [' massachusetts ', 'MA']]) {
     const draft = createHousingProfile()
     draft.profile.housingBasics.state = legacy

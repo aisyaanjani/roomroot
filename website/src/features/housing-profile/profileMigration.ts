@@ -10,6 +10,7 @@ export function migrateProfileV1(value: unknown): unknown {
   if (!basics || typeof basics !== 'object' || Array.isArray(basics)) return migrated
   const record = basics as Record<string, unknown>
   if (typeof record.state === 'string') record.state = normalizeStateCode(record.state) ?? record.state.trim()
+  if (record.lease === '12 months') record.lease = '12-month lease'
   if (!Object.hasOwn(record, 'commuteArea')) record.commuteArea = ''
   return migrated
 }

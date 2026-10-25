@@ -30,6 +30,9 @@ export interface NormalizedMatchingProfile extends HousingProfile {
 function leaseMonths(lease: string, otherLease: string): number | undefined {
   if (lease === 'Month-to-month') return 1
   if (lease === 'Semester') return 4
+  if (lease === 'Spring semester' || lease === 'Fall semester') return 4
+  if (lease === 'Summer sublet') return 3
+  if (lease === 'Academic year') return 9
   const source = lease === 'Other' ? otherLease : lease
   const match = source.match(/\d+/)
   return match ? Number(match[0]) : undefined

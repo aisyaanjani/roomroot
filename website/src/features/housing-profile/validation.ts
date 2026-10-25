@@ -10,8 +10,14 @@ export function validateSection(profile: HousingProfileData, section: number): P
     if (!b.city.trim()) add('city', 'Enter your preferred city.')
     if (!isStateCode(b.state)) add('state', 'Choose a valid U.S. state or Washington, D.C.')
     if (!b.transportation) add('transportation', 'Choose how you prefer to get around.')
-    if (b.minRent > b.maxRent) add('minRent', 'Minimum rent must be at or below maximum rent. Adjust either amount.')
-    if (b.totalBudget < b.maxRent) add('totalBudget', 'Your total monthly budget must cover your maximum rent, including utilities.')
+    if (Number.isFinite(b.minRent) && Number.isFinite(b.maxRent) && b.minRent > b.maxRent) {
+      add('minRent', 'Minimum expected rent must be at or below maximum affordable rent. Adjust either amount.')
+      add('maxRent', 'Maximum affordable rent must be at or above minimum expected rent. Adjust either amount.')
+    }
+    if (Number.isFinite(b.totalBudget) && Number.isFinite(b.maxRent) && b.totalBudget < b.maxRent) {
+      add('totalBudget', 'Maximum total monthly housing cost must cover maximum affordable rent, including utilities.')
+      add('maxRent', 'Maximum affordable rent must fit within the maximum total monthly housing cost, including utilities.')
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.moveInDate) || Number.isNaN(Date.parse(b.moveInDate)) || new Date(b.moveInDate).toISOString().slice(0,10) !== b.moveInDate) add('moveInDate', 'Choose a valid move-in date.')
     if (!b.lease) add('lease', 'Choose your preferred lease duration.')
     if (b.lease === 'Other' && !b.otherLease.trim()) add('otherLease', 'Describe your preferred lease duration, such as “9 months”.')
