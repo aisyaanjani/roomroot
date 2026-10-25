@@ -23,7 +23,11 @@
   box-sizing: border-box;
   background-color: #F7F5EF;
   color: #303830;
-  font-family: Arial, sans-serif;
+  /* Match the homepage stacks without changing its scoped design tokens. */
+  --rb-font-body: 'Segoe UI', Arial, sans-serif;
+  --rb-font-heading: Georgia, 'Times New Roman', serif;
+  font-family: var(--rb-font-body);
+  font-weight: 400;
 }
 
 .room-browsing h1 {
@@ -1451,4 +1455,33 @@
     min-height: 46px;
     font-size: 15px;
   }
+}
+
+/* Typography only: keep Laura's sizing, card geometry and responsive layout. */
+.room-browsing :is(h1, h2, h3) {
+  font-family: var(--rb-font-heading);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.room-browsing h1 {
+  letter-spacing: -0.04em;
+}
+
+.room-browsing h3 {
+  letter-spacing: -0.015em;
+}
+
+.room-browsing :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.room-browsing button {
+  font-weight: 600;
+}
+
+/* Leaflet supplies a Helvetica font shorthand; keep map labels cohesive too. */
+.room-browsing .leaflet-container {
+  font-family: var(--rb-font-body);
 }
