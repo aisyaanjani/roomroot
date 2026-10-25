@@ -1,3 +1,4 @@
+const GOOGLE_MODEL = 'models/gemma-4-26b-a4b-it';
 const OPENROUTER_MODEL = 'google/gemma-4-26b-a4b-it:free';
 
 export class AiProviderError extends Error {
@@ -11,7 +12,18 @@ export class AiProviderError extends Error {
 }
 
 export function getAiConfiguration(env = process.env) {
-  const provider = (env.AI_PROVIDER || 'openrouter').trim().toLowerCase();
+  const provider = (env.AI_PROVIDER || 'google').trim().toLowerCase();
+
+  if (provider === 'google') {
+    const model = env.AI_MODEL || GOOGLE_MODEL;
+    if (model !== GOOGLE_MODEL) throw new Error(`Unsupported Google model: ${model}`);
+    return {
+      provider,
+      model,
+      apiKey: env.GEMINI_API_KEY,
+      requiredKey: 'GEMINI_API_KEY'
+    };
+  }
 
   if (provider === 'openrouter') {
     const model = env.AI_MODEL || OPENROUTER_MODEL;
@@ -25,6 +37,42 @@ export function getAiConfiguration(env = process.env) {
   }
 
   throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
+}
+
+function googleRequest(prompt, configuration) {
+  return {
+    url: `https://generativelanguage.googleapis.com/v1beta/${configuration.model}:generateContent`,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': configuration.apiKey
+    },
+    payload: {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+        maxOutputTokens: 400,
+        thinkingConfig: { thinkingLevel: 'minimal' }
+      }
+    },
+    extractText(body) {
+      return body?.candidates?.[0]?.content?.parts
+        ?.filter((part) => part.thought !== true)
+        .map((part) => part.text || '')
+        .join('');
+    },
+    metrics(body) {
+      const candidate = body?.candidates?.[0];
+      const usage = body?.usageMetadata || {};
+      return {
+        promptTokenCount: usage.promptTokenCount ?? null,
+        candidatesTokenCount: usage.candidatesTokenCount ?? null,
+        thoughtsTokenCount: usage.thoughtsTokenCount ?? null,
+        totalTokenCount: usage.totalTokenCount ?? null,
+        finishReason: candidate?.finishReason ?? null
+      };
+    }
+  };
 }
 
 function openRouterRequest(prompt, configuration) {
@@ -64,25 +112,35 @@ export async function generateGemmaAnalysis(prompt, options = {}) {
   const configuration = options.configuration || getAiConfiguration(options.env);
   const fetchImpl = options.fetchImpl || fetch;
   // Validate even explicitly supplied configurations before any network request.
-  if (configuration.provider !== 'openrouter' || configuration.model !== OPENROUTER_MODEL) {
-    throw new Error('Only the exact free OpenRouter Gemma 4 model is allowed.');
-  }
-  const request = openRouterRequest(prompt, configuration);
+  const exactFreeModel = configuration.provider === 'google'
+    ? configuration.model === GOOGLE_MODEL
+    : configuration.provider === 'openrouter' && configuration.model === OPENROUTER_MODEL;
+  if (!exactFreeModel) throw new Error('Only an approved exact Gemma 4 model is allowed.');
+  const request = configuration.provider === 'google'
+    ? googleRequest(prompt, configuration)
+    : openRouterRequest(prompt, configuration);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000);
   const startedAt = performance.now();
   const serializedPayload = JSON.stringify(request.payload);
 
   try {
-    const response = await fetchImpl(request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: serializedPayload,
-      signal: controller.signal
-    });
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
+    let response;
+    let body;
+    const retryDelays = configuration.provider === 'google' ? (options.retryDelaysMs || [350, 900]) : [];
+    for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+      response = await fetchImpl(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: serializedPayload,
+        signal: controller.signal
+      });
+      body = await response.json().catch(() => ({}));
+      if (response.ok) break;
+      if (response.status === 429 && attempt < retryDelays.length) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+        continue;
+      }
       throw new AiProviderError(`${configuration.provider} request failed.`, {
         provider: configuration.provider,
         status: response.status,
@@ -146,7 +204,7 @@ export function describeAiFailure(error, configuration) {
     };
   }
   if (status === 429) {
-    return { status: 503, error: 'The free AI provider rate limit has been reached.', code: 'AI_PROVIDER_RATE_LIMITED' };
+    return { status: 503, error: 'Free AI is briefly busy. Wait a moment and refresh—no charge was attempted.', code: 'AI_PROVIDER_RATE_LIMITED' };
   }
   if (status >= 500) {
     return { status: 503, error: 'The AI provider is temporarily unavailable.', code: 'AI_PROVIDER_UNAVAILABLE' };
@@ -158,5 +216,6 @@ export function describeAiFailure(error, configuration) {
 }
 
 export const AI_MODELS = {
+  google: GOOGLE_MODEL,
   openrouter: OPENROUTER_MODEL
 };

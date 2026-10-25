@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createHash } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import {
@@ -40,6 +41,30 @@ app.use(express.json({ limit: '20kb' }));
 const aiRateLimitWindowMs = 60_000;
 const aiRateLimitMax = Math.max(1, Number.parseInt(process.env.AI_RATE_LIMIT_MAX || '10', 10) || 10);
 const aiRateLimitBuckets = new Map();
+const aiResponseCache = new Map();
+const aiCacheTtlMs = 15 * 60_000;
+const aiCacheMaxEntries = 100;
+
+function aiCacheKey(seeker, host) {
+  return createHash('sha256').update(JSON.stringify({ seeker, host })).digest('hex');
+}
+
+function readAiCache(key) {
+  const cached = aiResponseCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    aiResponseCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeAiCache(key, value) {
+  if (aiResponseCache.size >= aiCacheMaxEntries) {
+    aiResponseCache.delete(aiResponseCache.keys().next().value);
+  }
+  aiResponseCache.set(key, { value, expiresAt: Date.now() + aiCacheTtlMs });
+}
 
 function limitAiRequests(req, res, next) {
   const now = Date.now();
@@ -96,6 +121,13 @@ app.post('/api/match', limitAiRequests, async (req, res) => {
     return res.json(deterministicResponse(deterministic));
   }
 
+  const cacheKey = aiCacheKey(seeker, host);
+  const cached = readAiCache(cacheKey);
+  if (cached) {
+    res.set('X-RoomRoot-AI-Cache', 'HIT');
+    return res.json(cached);
+  }
+
   let aiConfiguration;
   try {
     aiConfiguration = getAiConfiguration();
@@ -116,11 +148,14 @@ app.post('/api/match', limitAiRequests, async (req, res) => {
       { configuration: aiConfiguration }
     );
     const analysis = validateAiAnalysis(parseGemmaJson(responseText));
-    res.json({
+    const result = {
       ...deterministicResponse(deterministic),
       ...analysis,
       aiGenerated: true
-    });
+    };
+    writeAiCache(cacheKey, result);
+    res.set('X-RoomRoot-AI-Cache', 'MISS');
+    res.json(result);
   } catch (error) {
     console.error('AI request failed:', JSON.stringify({
       provider: aiConfiguration.provider,

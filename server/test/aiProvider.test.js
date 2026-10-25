@@ -13,11 +13,17 @@ const openRouterConfiguration = () => getAiConfiguration({
   AI_PROVIDER: 'openrouter',
   OPENROUTER_API_KEY: 'test-openrouter-key'
 });
+const googleConfiguration = () => getAiConfiguration({
+  AI_PROVIDER: 'google',
+  GEMINI_API_KEY: 'test-google-key'
+});
 
-test('defaults to the exact free OpenRouter provider', () => {
+test('defaults to the exact free Google Gemma provider', () => {
   const configuration = getAiConfiguration({});
-  assert.equal(configuration.provider, 'openrouter');
-  assert.equal(configuration.model, 'google/gemma-4-26b-a4b-it:free');
+  assert.equal(configuration.provider, 'google');
+  assert.equal(configuration.model, 'models/gemma-4-26b-a4b-it');
+  assert.equal(configuration.requiredKey, 'GEMINI_API_KEY');
+  assert.equal(AI_MODELS.google, configuration.model);
 });
 
 test('selects the exact OpenRouter free Gemma 4 model', () => {
@@ -85,6 +91,37 @@ test('OpenRouter uses its chat endpoint and returns only model content', async (
   assert.match(text, /"summary":"Compatible"/);
 });
 
+test('Google uses the Gemini API Gemma endpoint and returns only final model content', async () => {
+  let capturedUrl;
+  let capturedRequest;
+  const text = await generateGemmaAnalysis('fictional prompt', {
+    configuration: googleConfiguration(),
+    fetchImpl: async (url, request) => {
+      capturedUrl = url;
+      capturedRequest = request;
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [
+            { thought: true, text: 'hidden reasoning' },
+            { text: '{"summary":"Compatible","strengths":[],"conflicts":[],"questions":[]}' }
+          ] }, finishReason: 'STOP' }],
+          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 8, totalTokenCount: 18 }
+        })
+      };
+    }
+  });
+
+  assert.equal(capturedUrl, 'https://generativelanguage.googleapis.com/v1beta/models/gemma-4-26b-a4b-it:generateContent');
+  const payload = JSON.parse(capturedRequest.body);
+  assert.equal(payload.contents[0].parts[0].text, 'fictional prompt');
+  assert.equal(payload.generationConfig.responseMimeType, 'application/json');
+  assert.equal(payload.generationConfig.maxOutputTokens, 400);
+  assert.equal(capturedRequest.headers['x-goog-api-key'], 'test-google-key');
+  assert.doesNotMatch(text, /hidden reasoning/);
+  assert.match(text, /"summary":"Compatible"/);
+});
+
 test('parses JSON after removing thought blocks and markdown fences', () => {
   const parsed = parseGemmaJson('<think>hidden</think>```json\n{"summary":"Valid","strengths":[],"conflicts":[],"questions":[]}\n```');
   assert.equal(parsed.summary, 'Valid');
@@ -124,6 +161,31 @@ test('surfaces OpenRouter HTTP status without exposing its response body', async
   );
 });
 
+test('retries brief Google free-tier rate limits and succeeds without changing providers', async () => {
+  let attempts = 0;
+  const text = await generateGemmaAnalysis('fictional prompt', {
+    configuration: googleConfiguration(),
+    retryDelaysMs: [0],
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          ok: false,
+          status: 429,
+          json: async () => ({ error: { status: 'RESOURCE_EXHAUSTED' } })
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: '{"summary":"Ready","strengths":[],"conflicts":[],"questions":[]}' }] } }] })
+      };
+    }
+  });
+  assert.equal(attempts, 2);
+  assert.match(text, /"summary":"Ready"/);
+});
+
 test('cancels a provider request when the timeout expires', async () => {
   await assert.rejects(
     generateGemmaAnalysis('fictional prompt', {
@@ -137,15 +199,15 @@ test('cancels a provider request when the timeout expires', async () => {
   );
 });
 
-test('rejects Google and injected paid configurations before fetching', async () => {
-  assert.throws(() => getAiConfiguration({ AI_PROVIDER: 'google' }), /Unsupported AI_PROVIDER/);
+test('rejects substitute Google and injected paid configurations before fetching', async () => {
+  assert.throws(() => getAiConfiguration({ AI_PROVIDER: 'google', AI_MODEL: 'gemini-4-argon' }), /Unsupported Google model/);
   for (const configuration of [
-    { provider: 'google', model: 'models/gemma-4-26b-a4b-it' },
+    { provider: 'google', model: 'models/gemini-4-argon' },
     { provider: 'openrouter', model: 'google/gemma-4-26b-a4b-it' },
   ]) {
     await assert.rejects(generateGemmaAnalysis('test', {
       configuration,
       fetchImpl: () => assert.fail('Must not contact a provider'),
-    }), /Only the exact free/);
+    }), /Only an approved exact Gemma 4/);
   }
 });
