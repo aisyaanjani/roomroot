@@ -4,3 +4,5 @@ export { saveHousingProfile, loadHousingProfile, updateHousingProfile, resetHous
 export { createHousingProfile, sections, housingTypes, amenities, lifestyleQuestions, compatibility, dealbreakers, priorityOptions } from './questions'
 export { validateSection } from './validation'
 export type { ProfileIssue } from './validation'
+export { migrateHousingProfile, parseHousingProfileJson, readHousingProfileFile, validateProfileFile, MAX_PROFILE_IMPORT_BYTES } from './importProfile'
+export type { ProfileImportPreview } from './importProfile'

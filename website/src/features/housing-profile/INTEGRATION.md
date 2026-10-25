@@ -42,7 +42,7 @@ Call this on entry to search/matching or when explicitly refreshing results. `lo
 
 A structurally valid draft can still lack required answers or have inconsistent budget bounds. `isHousingProfileDraft` checks the stored format and validates completed/summary records; `validateSection` checks section completion rules. Use both the completion flag and section validation at consumer boundaries. Optional questions may remain unanswered in completed profiles.
 
-For JSON received from a file or API, parse it as `unknown`, call `isHousingProfileDraft(value)`, and then perform the completed-profile checks above. TypeScript interfaces alone do not validate runtime input. The current feature exports JSON but has no JSON upload/import UI.
+The questionnaire exports and imports local JSON backups. Import enforces a 1 MB limit, accepts `.json` files only, parses entirely in the browser, passes data through `migrateHousingProfile`, and requires the strict `isHousingProfileDraft` contract before showing a preview. Nothing is written until the user confirms replacement. TypeScript interfaces alone do not validate runtime input.
 
 ## Housing search access
 
@@ -253,6 +253,9 @@ export interface HousingProfileDraft {
 | saveHousingProfile(draft) | Validates and writes entire envelope; boolean success; preserves supplied updatedAt |
 | updateHousingProfile(update) | Shallow update of profile/step/completed; stamps updatedAt; boolean success |
 | resetHousingProfile() | Removes only this feature's storage key; boolean success |
+| migrateHousingProfile(value) | Explicit version boundary for imported unknown data; currently accepts strict v1 records only |
+| parseHousingProfileJson(text) | Parses and migrates a local JSON backup without writing storage |
+| readHousingProfileFile(file) | Enforces file type/size and returns a validated draft without uploading or writing it |
 | validateSection(profile, sectionIndex) | ProfileIssue[] for indices 0–5 |
 | HOUSING_PROFILE_STORAGE_KEY | roomroot:housing-profile:v1 |
 | sections | Shared questionnaire section order |
@@ -284,7 +287,7 @@ Search and matching should normally read answers without modifying them. An exte
 - Records are browser/device and origin specific. Scheme, host, and port matter: localhost and 127.0.0.1 do not share answers. Development and deployment also have different records. Nothing syncs to teammates or across devices.
 - One record per origin, not per account. Users sharing a browser share the record. There is no authentication, server persistence, ownership, or server-side access to browser storage.
 - Data is plain JSON available to scripts on the origin, not encrypted storage. Any future backend needs its own consent and access policy.
-- Storage can be disabled, full, cleared, or transient in private browsing. Reads return null; failed writes/reset return false. Missing and invalid records both return null, with no migration/recovery UI.
+- Storage can be disabled, full, cleared, or transient in private browsing. Reads return null; failed writes/reset return false. Missing and invalid stored records both return null. The local import UI reports failed replacement writes and keeps the current in-memory profile unchanged.
 - Operations are synchronous; last writer wins across tabs. There is no conflict handling or React subscription. Browser storage events can notify other tabs, but this component does not listen. Re-read on route entry/refresh or introduce shared state explicitly later.
 - Autosave includes unfinished drafts. Consumers must check completed and completion rules; handle unanswered optional fields and accepted defaults explicitly.
 - The key/envelope are v1. Unsupported versions and malformed records are rejected, not migrated. A questionnaire mount falls back to defaults and autosaves them; it does not retain invalid data as a backup.
