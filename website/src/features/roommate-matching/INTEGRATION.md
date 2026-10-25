@@ -1,22 +1,21 @@
 # Roommate Matching integration
 
-`RoommateMatching` is a scoped feature that consumes the Housing Profile questionnaire and the existing RoomRoot matching API. It does not define another questionnaire, profile schema, or scoring engine.
+`RoommateMatching` is a scoped feature that consumes the Housing Profile questionnaire. It does not define another questionnaire or profile schema.
 
 ## Static release behavior
 
-The published GitHub Pages release deliberately disables all matching API calls. Compatibility scores, like/save actions, and AI conversation guides are marked unavailable; browsing the explicitly fictional profiles and local filters remains available. Housing profile data continues to be stored in the browser. The release build does not contact Cloud Run or an AI provider.
+The published GitHub Pages release calculates deterministic compatibility locally in the browser. Like, Pass, Save, and Undo state is stored locally with the housing profile. It does not call Cloud Run or an AI provider. Personalized AI conversation guidance remains unavailable and is clearly identified as requiring a backend AI-provider request; no AI-generated or fabricated fallback notes are shown.
 
-API-backed matching is available only in development when a matching API base URL is configured. Do not set `VITE_API_BASE_URL` for the static release.
+The deterministic scoring implementation is a browser-safe copy of the server rules. Keep its focused fixtures aligned with `server/test/matchingEngine.test.js` when changing scoring. The static release does not require `VITE_API_BASE_URL`.
 
 ## Data flow
 
 1. The parent reads a completed `HousingProfileDraft` with the Housing Profile feature's public API.
 2. It passes `draft.profile`—the actual exported `HousingProfileData`—to `RoommateMatching`.
-3. `adapter.ts` maps that profile and each fictional candidate to the backend wire format.
-4. The component calls `POST /api/match/deterministic` first and renders its authoritative score and breakdown.
-5. It then calls the existing `POST /api/match` in the background through `matchingApi.ts`, after the candidate remains visible briefly. Successful smart notes are cached for the browser session so revisiting a candidate is instant and does not consume another free-tier request. Timeout or model errors leave the deterministic result visible with a retry option.
-
-The frontend never computes a compatibility percentage. Importance weights, hard constraints, missing-answer handling, and dealbreakers are all evaluated by `server/matchingEngine.js`.
+3. `adapter.ts` normalizes that profile and each fictional candidate.
+4. `deterministicMatching.ts` calculates the compatibility score and breakdown entirely in the browser, with no application API request.
+5. Like, Pass, Save, and Undo update locally persisted deck state scoped to the housing profile.
+6. The Coffee Chat tab explains that personalized AI conversation guidance is unavailable; it does not call an AI provider or show generated fallback content.
 
 ## Render from a completed profile
 
@@ -48,24 +47,21 @@ The parent should reload the saved profile when entering or refreshing the match
 
 ## Isolated development preview
 
-Run the backend and Vite development server, then open:
+Run Vite, then open:
 
 ```text
 http://localhost:5173/src/features/roommate-matching/preview.html
 ```
 
-This page mounts the real `RoommateMatching` component with a clearly labeled fictional completed seeker profile and the existing eight fictional candidates. It does not use `App.tsx`, `main.tsx`, application routing, or global styles. Scores still come from the backend, and Gemma errors are displayed rather than replaced with demo AI text.
+This page mounts the real `RoommateMatching` component with a clearly labeled fictional completed seeker profile and the existing fictional candidates. It does not use `App.tsx`, `main.tsx`, application routing, global styles, or a backend.
 
-## Backend requirements
+## Backend parity
 
-Run the server on port 3001:
+The server matching engine remains available to API clients. It is not required by the static site or isolated preview. When changing scoring, run its tests as well as the browser scoring fixtures so both implementations stay aligned:
 
 ```bash
-cd server
-npm run dev
+npm test
 ```
-
-The website defaults to `http://localhost:3001` during development. Set `VITE_API_BASE_URL` locally only when intentionally testing an API-backed integration. Never expose `GEMINI_API_KEY` through a Vite variable.
 
 ## Demo data
 

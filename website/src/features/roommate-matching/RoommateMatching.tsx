@@ -1,43 +1,17 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useMemo, useReducer, useRef, useState } from 'react'
 import type { HousingProfileData } from '../housing-profile'
-import {
-  getCompatibilityMatch,
-  getDeterministicMatch,
-  matchingServiceAvailable,
-} from '../../services/matchingApi'
 import type { MatchResult } from '../../services/matchingApi'
 import { createMatchingRequest } from './adapter'
+import { calculateLocalMatch } from './deterministicMatching'
 import { fictionalRoommates } from './demoProfiles'
 import type { FictionalRoommate } from './demoProfiles'
-import { discoveryReducer, initialDiscoveryState } from './discoveryState'
+import { discoveryReducer, loadDiscoveryState, saveDiscoveryState } from './discoveryState'
 import './RoommateMatching.css'
 import './RoommateMatchingEnhancements.css'
 
 export interface RoommateMatchingProps {
   currentProfile: HousingProfileData
   profiles?: FictionalRoommate[]
-}
-
-type AiState = { status: 'idle' | 'loading' | 'success' | 'unavailable'; result?: MatchResult; message?: string }
-
-const aiCacheKey = (profileId: string, currentProfile: HousingProfileData) =>
-  `roomroot:match-insights:${profileId}:${JSON.stringify(currentProfile)}`
-
-function readCachedInsights(key: string): MatchResult | undefined {
-  try {
-    const value = sessionStorage.getItem(key)
-    return value ? JSON.parse(value) as MatchResult : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function cacheInsights(key: string, value: MatchResult) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Matching still works when storage is unavailable or full.
-  }
 }
 
 const money = (value: number) => new Intl.NumberFormat('en-US', {
@@ -61,19 +35,9 @@ function domainScore(items: MatchResult['breakdown'], logistics: boolean) {
   return { matched, total: selected.length, percent: selected.length ? Math.round((matched / selected.length) * 100) : 0 }
 }
 
-function fallbackQuestions(items: MatchResult['breakdown']) {
-  const mismatches = new Set(items.filter(item => !item.matches).map(item => item.field))
-  const questions: string[] = []
-  if (mismatches.has('sleep schedule') || mismatches.has('noise preference')) questions.push('What quiet hours work on weeknights, during exams, and on game weekends?')
-  if (mismatches.has('cleanliness') || mismatches.has('cleaning expectations')) questions.push('How should we split kitchen and bathroom chores, and how often should they be done?')
-  if (mismatches.has('guest frequency') || mismatches.has('overnight guests')) questions.push('How much notice should we give for visitors, and what overnight-guest boundaries feel fair?')
-  if (mismatches.has('shared groceries')) questions.push('Which groceries and household supplies, if any, should we share?')
-  if (mismatches.has('communication style')) questions.push('How should we bring up a problem before it turns into resentment?')
-  return [...questions, 'What should we put in writing before signing a lease?'].slice(0, 3)
-}
-
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
-  const [state, dispatch] = useReducer(discoveryReducer, initialDiscoveryState)
+  const [state, dispatch] = useReducer(discoveryReducer, currentProfile, loadDiscoveryState)
+  const [storageUnavailable, setStorageUnavailable] = useState(false)
   const [city, setCity] = useState('All cities')
   const [maxBudget, setMaxBudget] = useState(1300)
   const [moveInBy, setMoveInBy] = useState('')
@@ -90,12 +54,8 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const [transitCorridor, setTransitCorridor] = useState('Any commute corridor')
   const [academicTerm, setAcademicTerm] = useState('Any lease term')
   const [privateBathroom, setPrivateBathroom] = useState(false)
-  const [deterministic, setDeterministic] = useState<Record<string, MatchResult>>({})
-  const [deterministicError, setDeterministicError] = useState<Record<string, string>>({})
-  const [ai, setAi] = useState<Record<string, AiState>>({})
   const [analysisTab, setAnalysisTab] = useState<'compatibility' | 'guide'>('compatibility')
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null)
-  const startedMatches = useRef(new Set<string>())
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
 
   const cities = useMemo(() => ['All cities', ...new Set(profiles.map(item => item.profile.housingBasics.city))], [profiles])
@@ -122,96 +82,36 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   }), [academicTerm, city, guestFrequency, householdRhythm, housingType, kitchenStyle, maxBudget, moveInBy, occupancyCap, petPreference, privateBathroom, profiles, roommateDynamic, searchMode, sharedMeals, smokeFree, transitCorridor])
 
   const candidate = filtered[state.currentIndex]
-  const result = candidate ? deterministic[candidate.id] : undefined
-  const aiState = candidate ? ai[candidate.id] : undefined
+  const request = candidate ? createMatchingRequest(currentProfile, candidate.profile) : undefined
+  const result = request ? calculateLocalMatch(request.seeker, request.host) : undefined
 
-  useEffect(() => {
-    const started = startedMatches.current
-    if (!matchingServiceAvailable || !candidate || started.has(candidate.id) || deterministic[candidate.id]) return
-    const id = candidate.id
-    started.add(id)
-    const request = createMatchingRequest(currentProfile, candidate.profile)
-    let active = true
-    async function loadMatch() {
-      let deterministicResult: MatchResult
-      try {
-        deterministicResult = await getDeterministicMatch(request.seeker, request.host)
-      } catch (error) {
-        if (!active) return
-        const message = error instanceof Error ? error.message : 'Matching is temporarily unavailable.'
-        setDeterministicError(previous => ({ ...previous, [id]: message }))
-        return
-      }
-      if (!active) return
-      setDeterministic(previous => ({ ...previous, [id]: deterministicResult }))
-    }
-    void loadMatch()
-    return () => {
-      active = false
-      started.delete(id)
-    }
-  }, [candidate, currentProfile, deterministic])
+  function applyAction(action: Parameters<typeof discoveryReducer>[1]) {
+    const next = discoveryReducer(state, action)
+    dispatch(action)
+    setStorageUnavailable(!saveDiscoveryState(currentProfile, next))
+  }
 
-  const requestAiInsights = useCallback(async (target: FictionalRoommate) => {
-    if (!matchingServiceAvailable) return
-    if (ai[target.id]?.status === 'loading') return
-    const id = target.id
-    const request = createMatchingRequest(currentProfile, target.profile)
-    const cacheKey = aiCacheKey(id, currentProfile)
-    const cached = readCachedInsights(cacheKey)
-    if (cached) {
-      setAi(previous => ({ ...previous, [id]: { status: 'success', result: cached } }))
-      return
-    }
-    setAi(previous => ({ ...previous, [id]: { status: 'loading' } }))
-    try {
-      const value = await getCompatibilityMatch(request.seeker, request.host)
-      if (value.aiGenerated) cacheInsights(cacheKey, value)
-      setAi(previous => ({
-        ...previous,
-        [id]: value.aiGenerated
-          ? { status: 'success', result: value }
-          : { status: 'unavailable', message: 'No additional match notes were returned.' },
-      }))
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Smart match notes are temporarily unavailable.'
-      setAi(previous => ({ ...previous, [id]: { status: 'unavailable', message } }))
-    }
-  }, [ai, currentProfile])
-
-  useEffect(() => {
-    if (!matchingServiceAvailable || !candidate || !result || aiState) return
-    const cached = readCachedInsights(aiCacheKey(candidate.id, currentProfile))
-    if (!cached) return
-    const target = candidate
-    const timer = window.setTimeout(() => void requestAiInsights(target), 0)
-    return () => window.clearTimeout(timer)
-  }, [aiState, candidate, currentProfile, requestAiInsights, result])
-
-  function resetDeck() { setAnalysisTab('compatibility'); dispatch({ type: 'reset' }) }
-  function updateFilter(update: () => void) { update(); setAnalysisTab('compatibility'); dispatch({ type: 'rewind' }) }
+  function resetDeck() { setAnalysisTab('compatibility'); applyAction({ type: 'reset' }) }
+  function updateFilter(update: () => void) { update(); setAnalysisTab('compatibility'); applyAction({ type: 'rewind' }) }
   function openGuide() {
-    if (!matchingServiceAvailable || !candidate) return
+    if (!candidate) return
     setAnalysisTab('guide')
-    if (!aiState) void requestAiInsights(candidate)
   }
   function saveCandidate() {
-    if (!matchingServiceAvailable || !candidate) return
-    dispatch({ type: 'save', id: candidate.id })
-    if (!aiState) void requestAiInsights(candidate)
+    if (!candidate) return
+    applyAction({ type: 'save', id: candidate.id })
   }
   function swipe(action: 'pass' | 'like') {
-    if (!matchingServiceAvailable || !candidate || swipeDirection) return
+    if (!candidate || swipeDirection) return
     setSwipeDirection(action === 'pass' ? 'left' : 'right')
     window.setTimeout(() => {
-      dispatch({ type: action, id: candidate.id })
+      applyAction({ type: action, id: candidate.id })
       setAnalysisTab('compatibility')
       setSwipeDirection(null)
     }, 180)
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
-    if (!matchingServiceAvailable) return
     if ((event.target as HTMLElement).closest('button,input,select,a,summary')) return
     pointerStart.current = { x: event.clientX, y: event.clientY }
   }
@@ -261,11 +161,8 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
       </aside>
 
       <div className="rm-content">
-        <div className="rm-heading"><div><p className="rm-kicker">{matchingServiceAvailable ? 'YOUR COMPATIBILITY DECK' : 'FICTIONAL PROFILE BROWSING'}</p><h1>{matchingServiceAvailable ? 'Meet your next roommate.' : 'Explore roommate profiles.'}</h1></div><button type="button" onClick={() => { setAnalysisTab('compatibility'); dispatch({ type: 'undo' }) }} disabled={!matchingServiceAvailable || !state.history.length}>↶ Undo</button></div>
-        {!matchingServiceAvailable && <aside className="rm-unavailable" role="status">
-          <strong>Roommate matching is unavailable in this static release.</strong>
-          <p>Compatibility scores, like/save actions, and AI conversation guides are turned off. You can browse and filter fictional demo profiles; your housing profile and preferences stay on this device. This release does not contact the matching service.</p>
-        </aside>}
+        <div className="rm-heading"><div><p className="rm-kicker">YOUR COMPATIBILITY DECK · LOCAL SCORING</p><h1>Meet your next roommate.</h1></div><button type="button" onClick={() => { setAnalysisTab('compatibility'); applyAction({ type: 'undo' }) }} disabled={!state.history.length}>↶ Undo</button></div>
+        {storageUnavailable && <aside className="rm-unavailable" role="status"><strong>Actions could not be saved on this device.</strong><p>Like, Pass, Save, and Undo still work for this visit, but browser storage is unavailable.</p></aside>}
 
         {!candidate ? <section className="rm-empty"><span aria-hidden="true">🌿</span><h2>You’ve reached the end of this deck.</h2><p>Adjust your filters or review the fictional profiles again.</p><button type="button" onClick={resetDeck}>Restart deck</button></section> :
           <article className={`rm-card${swipeDirection ? ` is-swiping-${swipeDirection}` : ''}`} tabIndex={0} aria-label={`${candidate.name} roommate match. Swipe or use arrow keys to decide.`} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onKeyDown={event => { if (event.key === 'ArrowLeft') swipe('pass'); if (event.key === 'ArrowRight') swipe('like') }}>
@@ -285,12 +182,9 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
             </div>
 
             <div className="rm-analysis-pane">
-              {!matchingServiceAvailable && <div className="rm-unavailable" role="status"><strong>Compatibility details unavailable</strong><p>No Cloud Run or AI matching requests are made by this release.</p></div>}
-              {matchingServiceAvailable && !result && !deterministicError[candidate.id] && <div className="rm-loading" role="status"><span />Calculating deterministic compatibility…</div>}
-              {deterministicError[candidate.id] && <div className="rm-alert" role="alert"><strong>Matching service unavailable</strong><p>{deterministicError[candidate.id]}</p></div>}
               {result && <>
                 <div className="rm-score-row"><div className="rm-score" aria-label={`${result.compatibilityScore ?? 'Not enough information'} compatibility score`}>{result.compatibilityScore === null ? '—' : `${result.compatibilityScore}%`}</div><div><p className="rm-kicker">CORE COMPATIBILITY</p><h3>{result.eligible ? 'Worth a conversation' : 'Review firm constraints'}</h3></div></div>
-                <p className="rm-method">Your score comes from stated preferences and dealbreakers. Smart notes only help explain what to discuss.</p>
+                <p className="rm-method">This score is calculated locally from stated profile preferences and dealbreakers. It is deterministic, not AI-generated.</p>
                 {!!result.hardConstraints.length && <section className="rm-alert"><h3>Dealbreakers or hard constraints</h3><ul>{result.hardConstraints.map(item => <li key={item}>{item}</li>)}</ul></section>}
                 <div className="rm-analysis-tabs" role="tablist" aria-label="Match details"><button type="button" role="tab" aria-selected={analysisTab === 'compatibility'} onClick={() => setAnalysisTab('compatibility')}>Compatibility & rhythm</button><button type="button" role="tab" aria-selected={analysisTab === 'guide'} onClick={openGuide}>Coffee chat & house rules ✨</button></div>
                 {analysisTab === 'compatibility' ? <div role="tabpanel" className="rm-tab-panel">
@@ -301,26 +195,15 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
                   {!!result.discussionItems.length && <section><h3>Needs discussion</h3><ul>{result.discussionItems.map(item => <li key={item}>{item}</li>)}</ul></section>}
                   {!!result.missingInformation.length && <details><summary>Missing information ({result.missingInformation.length})</summary><ul>{result.missingInformation.map(item => <li key={item}>{item}</li>)}</ul></details>}
                 </div> : <section className="rm-ai rm-ai-editorial" role="tabpanel">
-                  <div className="rm-ai-heading"><div><p className="rm-kicker">LIVING TOGETHER GUIDE · POWERED BY GEMMA</p><h3>How routines fit & what to ask before leasing</h3></div>{aiState?.status === 'success' && <span>Ready</span>}</div>
-                  {!aiState && <div className="rm-ai-loading" role="status"><span />Preparing questions for your coffee chat with {candidate.name.split(' ')[0]}…</div>}
-                  {aiState?.status === 'loading' && <div className="rm-ai-loading" role="status"><span />Building your living-together guide…</div>}
-                  {aiState?.status === 'unavailable' && <><div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{fallbackQuestions(result.breakdown).map(item => <li key={item}>{item}</li>)}</ul></div><button className="rm-refresh-link" type="button" onClick={() => void requestAiInsights(candidate)}>↻ Refresh custom guide</button></>}
-                  {aiState?.status === 'success' && aiState.result && <>
-                    <p className="rm-ai-summary">{aiState.result.summary}</p>
-                    <div className="rm-ai-columns">
-                      {!!aiState.result.strengths.length && <div className="rm-ai-positive"><h4>✓ Shared ground</h4><ul>{aiState.result.strengths.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                      {!!aiState.result.conflicts.length && <div className="rm-ai-watch"><h4>! Routines to coordinate</h4><ul>{aiState.result.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                    </div>
-                    {!!aiState.result.questions.length && <div className="rm-conversation-card"><h4>3 questions before signing a lease</h4><ul>{aiState.result.questions.map(item => <li key={item}>{item}</li>)}</ul></div>}
-                    <details className="rm-ai-disclosure"><summary>What Gemma does here</summary><p>Gemma translates the comparison into conversation prompts. It does not rate people, change the score, verify identity, or certify safety.</p></details>
-                  </>}
+                  <div className="rm-ai-heading"><div><p className="rm-kicker">COFFEE CHAT & HOUSE RULES</p><h3>AI conversation guidance is turned off</h3></div></div>
+                  <p className="rm-ai-disabled">Personalized AI conversation guidance requires a backend AI-provider request. No AI-generated notes or fallback results are shown in this release; compatibility scoring and deck actions remain available locally.</p>
                 </section>}
               </>}
             </div>
             <footer className="rm-actions">
-              <button className="rm-pass" type="button" onClick={() => swipe('pass')} disabled={!matchingServiceAvailable}>✕ Pass</button>
-              <button className="rm-save" type="button" aria-pressed={state.saved.includes(candidate.id)} onClick={saveCandidate} disabled={!matchingServiceAvailable}>☆ {state.saved.includes(candidate.id) ? 'Saved' : 'Save'}</button>
-              <button className="rm-like" type="button" onClick={() => swipe('like')} disabled={!matchingServiceAvailable}>♡ Like</button>
+              <button className="rm-pass" type="button" onClick={() => swipe('pass')}>✕ Pass</button>
+              <button className="rm-save" type="button" aria-pressed={state.saved.includes(candidate.id)} onClick={saveCandidate}>☆ {state.saved.includes(candidate.id) ? 'Saved' : 'Save'}</button>
+              <button className="rm-like" type="button" onClick={() => swipe('like')}>♡ Like</button>
             </footer>
           </article>}
       </div>

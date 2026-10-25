@@ -2,8 +2,8 @@ name: Publish RoomRoot demo (manual)
 on:
   workflow_dispatch:
     inputs:
-      confirm_api_free_static_release:
-        description: 'Confirm this release disables application API calls and publishes static GitHub Pages assets only?'
+      confirm_local_scoring_static_release:
+        description: 'Confirm matching scores and deck actions run locally, while AI guidance remains disabled?'
         required: true
         type: boolean
         default: false
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: inputs.confirm_api_free_static_release && github.ref == 'refs/heads/main' && github.event.repository.private == false
+    if: inputs.confirm_local_scoring_static_release && github.ref == 'refs/heads/main' && github.event.repository.private == false
     runs-on: ubuntu-latest
     environment:
       name: github-pages
