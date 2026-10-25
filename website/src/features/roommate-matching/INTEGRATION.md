@@ -4,7 +4,7 @@
 
 ## Static release behavior
 
-The published GitHub Pages release calculates deterministic compatibility locally in the browser. Like, Pass, Save, and Undo state is stored locally with the housing profile. It does not call Cloud Run or an AI provider. Personalized AI conversation guidance remains unavailable and is clearly identified as requiring a backend AI-provider request; no AI-generated or fabricated fallback notes are shown.
+The published GitHub Pages release calculates deterministic compatibility locally in the browser. Like, Pass, Save, Undo, and simulated chat state is stored locally with the housing profile. A Like displays a clearly labeled simulated mutual match; chat replies are predefined per fictional roommate. No real person receives messages. Matching and chat do not call Cloud Run, an application API, or an AI provider. Personalized AI conversation guidance remains unavailable; no AI-generated or fabricated fallback notes are shown.
 
 The deterministic scoring implementation is a browser-safe copy of the server rules. Keep its focused fixtures aligned with `server/test/matchingEngine.test.js` when changing scoring. The static release does not require `VITE_API_BASE_URL`.
 
@@ -15,7 +15,9 @@ The deterministic scoring implementation is a browser-safe copy of the server ru
 3. `adapter.ts` normalizes that profile and each fictional candidate.
 4. `deterministicMatching.ts` calculates the compatibility score and breakdown entirely in the browser, with no application API request.
 5. Like, Pass, Save, and Undo update locally persisted deck state scoped to the housing profile.
-6. The Coffee Chat tab explains that personalized AI conversation guidance is unavailable; it does not call an AI provider or show generated fallback content.
+6. Liking a fictional roommate shows a simulated mutual match. Starting a chat creates at most one local conversation per fictional roommate.
+7. Chat messages and unread state persist in `roomroot:demo-chat:v1`, scoped to the current housing profile. Replies are predefined text, marked as simulated, and do not reach a person.
+8. The Coffee Chat tab explains that personalized AI conversation guidance is unavailable; it does not call an AI provider or show generated fallback content.
 
 ## Render from a completed profile
 

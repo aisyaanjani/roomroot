@@ -1,7 +1,9 @@
-import { useMemo, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { HousingProfileData } from '../housing-profile'
 import type { MatchResult } from '../../services/matchingApi'
 import { createMatchingRequest } from './adapter'
+import { chatReducer, loadChatState, saveChatState, unreadMessageCount } from './chatState'
+import type { ChatAction, ChatConversation, ChatMessage, ChatState } from './chatState'
 import { calculateLocalMatch } from './deterministicMatching'
 import { fictionalRoommates } from './demoProfiles'
 import type { FictionalRoommate } from './demoProfiles'
@@ -26,8 +28,48 @@ const priorityLabel = (weight: number) => {
 }
 
 const answerLabel = (value: unknown) => Array.isArray(value) ? value.join(', ') : String(value ?? 'Not answered')
+const messageTime = (value: string) => new Intl.DateTimeFormat(undefined, {
+  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+}).format(new Date(value))
+
+const simulatedReplies: Record<string, string[]> = {
+  maya: [
+    'That sounds lovely. I usually plan a shared dinner once or twice a week, but no pressure if schedules get busy.',
+    'I appreciate you asking! A quick heads-up about guests and quiet hours works really well for me.',
+  ],
+  jordan: [
+    'Hey, great question! I’m usually up for a relaxed game night, and I’m happy to coordinate around everyone’s schedule.',
+    'Totally fair. Let’s make a simple plan for shared spaces so it feels easy for everybody.',
+  ],
+  priya: [
+    'Thanks for bringing that up. Calm evenings and clear plans are important to me too.',
+    'I’d be glad to talk through a routine that works for both of us before making any decisions.',
+  ],
+  leo: [
+    'That sounds good! I’m pretty flexible and always happy to compare notes over coffee.',
+    'Thanks for checking in. A little communication ahead of time makes shared plans much easier.',
+  ],
+  sam: [
+    'I like that idea. I’m always up for figuring out a cozy routine that leaves room for everyone’s projects.',
+    'That makes sense. We can keep it simple and check in if something needs adjusting.',
+  ],
+  aisha: [
+    'Thanks for asking. A clear plan and a little notice are what work best for me.',
+    'I appreciate the thoughtful question. I’m happy to agree on a routine together.',
+  ],
+  noah: [
+    'Sounds good to me. I’m pretty easygoing, so just let me know what works for your schedule.',
+    'Thanks for checking! A quick text beforehand is usually perfect for me.',
+  ],
+  elena: [
+    'I’m glad you brought that up. Shared expectations make a home feel much more comfortable.',
+    'That works for me. We can agree on a routine and revisit it if anything changes.',
+  ],
+}
 
 const logisticsFields = new Set(['monthly housing budget', 'monthly housing cost', 'lease duration', 'location', 'move-in date', 'housing type'])
+
+type ChatView = { screen: 'inbox' } | { screen: 'chat'; roommateId: string; returnTo: 'inbox' | 'matches' }
 
 function domainScore(items: MatchResult['breakdown'], logistics: boolean) {
   const selected = items.filter(item => logisticsFields.has(item.field) === logistics)
@@ -37,6 +79,18 @@ function domainScore(items: MatchResult['breakdown'], logistics: boolean) {
 
 export function RoommateMatching({ currentProfile, profiles = fictionalRoommates }: RoommateMatchingProps) {
   const [state, dispatch] = useReducer(discoveryReducer, currentProfile, loadDiscoveryState)
+  const [chatState, setChatState] = useState<ChatState>(() => loadChatState(currentProfile))
+  const chatStateRef = useRef(chatState)
+  const activeChatIdRef = useRef<string | null>(null)
+  const messageEndRef = useRef<HTMLDivElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
+  const inboxHeadingRef = useRef<HTMLHeadingElement>(null)
+  const matchHeadingRef = useRef<HTMLHeadingElement>(null)
+  const newMatchHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [chatView, setChatView] = useState<ChatView | null>(null)
+  const [newlyMatched, setNewlyMatched] = useState<FictionalRoommate | null>(null)
+  const [chatStorageUnavailable, setChatStorageUnavailable] = useState(false)
+  const [messageDraft, setMessageDraft] = useState('')
   const [storageUnavailable, setStorageUnavailable] = useState(false)
   const [city, setCity] = useState('All cities')
   const [maxBudget, setMaxBudget] = useState(1300)
@@ -84,6 +138,23 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   const candidate = filtered[state.currentIndex]
   const request = candidate ? createMatchingRequest(currentProfile, candidate.profile) : undefined
   const result = request ? calculateLocalMatch(request.seeker, request.host) : undefined
+  const unreadCount = unreadMessageCount(chatState)
+  const activeConversation = chatView?.screen === 'chat'
+    ? chatState.conversations.find(item => item.roommateId === chatView.roommateId)
+    : undefined
+
+  useEffect(() => {
+    if (chatView?.screen === 'chat') {
+      messageEndRef.current?.scrollIntoView({ block: 'nearest' })
+      messageInputRef.current?.focus()
+    } else if (chatView?.screen === 'inbox') {
+      inboxHeadingRef.current?.focus()
+    }
+  }, [activeConversation?.messages.length, chatView])
+
+  useEffect(() => {
+    if (newlyMatched) newMatchHeadingRef.current?.focus()
+  }, [newlyMatched])
 
   function applyAction(action: Parameters<typeof discoveryReducer>[1]) {
     const next = discoveryReducer(state, action)
@@ -91,7 +162,60 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
     setStorageUnavailable(!saveDiscoveryState(currentProfile, next))
   }
 
-  function resetDeck() { setAnalysisTab('compatibility'); applyAction({ type: 'reset' }) }
+  function applyChatAction(action: ChatAction) {
+    const next = chatReducer(chatStateRef.current, action)
+    chatStateRef.current = next
+    setChatState(next)
+    setChatStorageUnavailable(!saveChatState(currentProfile, next))
+  }
+
+  function openInbox() {
+    activeChatIdRef.current = null
+    setChatView({ screen: 'inbox' })
+  }
+
+  function openConversation(conversation: ChatConversation, fromInbox: boolean) {
+    activeChatIdRef.current = conversation.roommateId
+    applyChatAction({ type: 'read', roommateId: conversation.roommateId })
+    setChatView({ screen: 'chat', roommateId: conversation.roommateId, returnTo: fromInbox ? 'inbox' : 'matches' })
+    if (!fromInbox) setNewlyMatched(null)
+  }
+
+  function startChat(roommate: FictionalRoommate) {
+    applyChatAction({ type: 'start', roommateId: roommate.id, roommateName: roommate.name })
+    const conversation = chatStateRef.current.conversations.find(item => item.roommateId === roommate.id)
+      ?? { roommateId: roommate.id, roommateName: roommate.name, messages: [] }
+    openConversation(conversation, false)
+  }
+
+  function sendMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const text = messageDraft.trim()
+    if (!text || !activeConversation) return
+    const roommateId = activeConversation.roommateId
+    const createMessage = (sender: ChatMessage['sender'], content: string, unread = false): ChatMessage => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sender,
+      text: content,
+      createdAt: new Date().toISOString(),
+      unread,
+    })
+    applyChatAction({ type: 'send', roommateId, message: createMessage('you', text) })
+    setMessageDraft('')
+    window.setTimeout(() => {
+      const current = chatStateRef.current.conversations.find(item => item.roommateId === roommateId)
+      if (!current) return
+      const replies = simulatedReplies[roommateId] ?? ['Thanks for the message! I’m happy to talk through what makes a shared home feel comfortable.']
+      const replyNumber = current.messages.filter(message => message.sender === 'roommate').length
+      applyChatAction({
+        type: 'reply',
+        roommateId,
+        message: createMessage('roommate', replies[replyNumber % replies.length], activeChatIdRef.current !== roommateId),
+      })
+    }, 450)
+  }
+
+  function resetDeck() { setNewlyMatched(null); setAnalysisTab('compatibility'); applyAction({ type: 'reset' }) }
   function updateFilter(update: () => void) { update(); setAnalysisTab('compatibility'); applyAction({ type: 'rewind' }) }
   function openGuide() {
     if (!candidate) return
@@ -103,10 +227,12 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
   }
   function swipe(action: 'pass' | 'like') {
     if (!candidate || swipeDirection) return
+    setNewlyMatched(null)
     setSwipeDirection(action === 'pass' ? 'left' : 'right')
     window.setTimeout(() => {
       applyAction({ type: action, id: candidate.id })
       setAnalysisTab('compatibility')
+      if (action === 'like') setNewlyMatched(candidate)
       setSwipeDirection(null)
     }, 180)
   }
@@ -161,9 +287,58 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
       </aside>
 
       <div className="rm-content">
-        <div className="rm-heading"><div><p className="rm-kicker">YOUR COMPATIBILITY DECK · LOCAL SCORING</p><h1>Meet your next roommate.</h1></div><button type="button" onClick={() => { setAnalysisTab('compatibility'); applyAction({ type: 'undo' }) }} disabled={!state.history.length}>↶ Undo</button></div>
+        <div className="rm-heading">
+          <div><p className="rm-kicker">YOUR COMPATIBILITY DECK · LOCAL SCORING</p><h1 ref={matchHeadingRef} tabIndex={-1}>Meet your next roommate.</h1></div>
+          <div className="rm-heading-actions">
+            <button type="button" className="rm-inbox-button" onClick={openInbox}>Inbox{unreadCount > 0 && <span className="rm-unread-count" aria-label={`${unreadCount} unread messages`}>{unreadCount}</span>}</button>
+            <button type="button" onClick={() => { setAnalysisTab('compatibility'); applyAction({ type: 'undo' }) }} disabled={!state.history.length}>↶ Undo</button>
+          </div>
+        </div>
         {storageUnavailable && <aside className="rm-unavailable" role="status"><strong>Actions could not be saved on this device.</strong><p>Like, Pass, Save, and Undo still work for this visit, but browser storage is unavailable.</p></aside>}
+        {chatStorageUnavailable && <aside className="rm-unavailable" role="status"><strong>Chats could not be saved on this device.</strong><p>You can continue this conversation during this visit, but browser storage is unavailable.</p></aside>}
 
+        {chatView ? chatView.screen === 'inbox' ? <section className="rm-chat-panel rm-inbox-panel" aria-labelledby="rm-inbox-title">
+          <div className="rm-chat-panel-heading"><div><p className="rm-kicker">FICTIONAL DEMO · SAVED ON THIS DEVICE</p><h2 id="rm-inbox-title" ref={inboxHeadingRef} tabIndex={-1}>Your inbox</h2><p>These simulated conversations are only for this demo. No real person receives messages.</p></div><button type="button" onClick={() => { setChatView(null); matchHeadingRef.current?.focus() }}>Back to matches</button></div>
+          {chatState.conversations.length ? <ul className="rm-inbox-list">{chatState.conversations.map(conversation => {
+            const latest = conversation.messages.at(-1)
+            const unread = conversation.messages.filter(message => message.sender === 'roommate' && message.unread).length
+            return <li key={conversation.roommateId}><button type="button" onClick={() => openConversation(conversation, true)} aria-label={`Open conversation with ${conversation.roommateName}${unread ? `, ${unread} unread messages` : ''}`}>
+              <span className="rm-inbox-avatar" aria-hidden="true">{conversation.roommateName.split(' ').map(part => part[0]).join('')}</span>
+              <span className="rm-inbox-copy"><strong>{conversation.roommateName}</strong><small>{latest ? latest.text : 'Conversation started — say hello!'}</small></span>
+              <span className="rm-inbox-meta">{latest && <time dateTime={latest.createdAt}>{messageTime(latest.createdAt)}</time>}{unread > 0 && <b className="rm-unread-count">{unread}</b>}</span>
+            </button></li>
+          })}</ul> : <div className="rm-chat-empty"><span aria-hidden="true">☕</span><h3>Your inbox is ready when you are.</h3><p>Like a fictional roommate, then choose Start chat to open a simulated conversation.</p><button type="button" onClick={() => setChatView(null)}>Browse matches</button></div>}
+        </section> : activeConversation ? <section className="rm-chat-panel rm-conversation-panel" aria-labelledby="rm-chat-title">
+          <div className="rm-chat-panel-heading rm-conversation-heading">
+            <div><p className="rm-kicker">SIMULATED CONVERSATION · FICTIONAL DEMO</p><h2 id="rm-chat-title">{activeConversation.roommateName}</h2></div>
+            <button type="button" onClick={() => {
+              if (chatView.returnTo === 'inbox') {
+                activeChatIdRef.current = null
+                setChatView({ screen: 'inbox' })
+              }
+              else { activeChatIdRef.current = null; setChatView(null); matchHeadingRef.current?.focus() }
+            }}>{chatView.returnTo === 'inbox' ? 'Back to inbox' : 'Back to matches'}</button>
+          </div>
+          <p className="rm-chat-disclaimer">Your messages stay in this browser. Replies are predefined simulations—not AI and not sent to a real person.</p>
+          <div className="rm-chat-messages" role="log" aria-label={`Simulated messages with ${activeConversation.roommateName}`} aria-relevant="additions text">
+            {activeConversation.messages.length ? activeConversation.messages.map(message => <article key={message.id} className={`rm-chat-message rm-message-${message.sender}`}>
+              <div className="rm-message-label">{message.sender === 'you' ? 'You' : `Simulated reply · ${activeConversation.roommateName}`}{message.unread && <span className="rm-message-unread">Unread</span>}</div>
+              <p>{message.text}</p>
+              <time dateTime={message.createdAt}>{messageTime(message.createdAt)}</time>
+            </article>) : <p className="rm-chat-first-message">Say hello to {activeConversation.roommateName}. This is a simulated chat with no real recipient.</p>}
+            <div ref={messageEndRef} />
+          </div>
+          <form className="rm-chat-compose" onSubmit={sendMessage}>
+            <label htmlFor="rm-chat-input">Your message</label>
+            <div><input id="rm-chat-input" ref={messageInputRef} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} maxLength={1000} autoComplete="off" placeholder={`Write a message to ${activeConversation.roommateName}…`} /><button type="submit" disabled={!messageDraft.trim()}>Send</button></div>
+            <small>Up to 1,000 characters · Enter to send</small>
+          </form>
+        </section> : <section className="rm-empty" role="status"><h2>This conversation is unavailable.</h2><button type="button" onClick={openInbox}>Return to inbox</button></section> : <>
+        {newlyMatched && <section className="rm-match-notice" aria-labelledby="rm-match-title">
+          <div className="rm-match-avatar" aria-hidden="true">{newlyMatched.initials}</div>
+          <div className="rm-match-copy"><p className="rm-kicker">SIMULATED MUTUAL MATCH · FICTIONAL DEMO</p><h2 id="rm-match-title" ref={newMatchHeadingRef} tabIndex={-1}>You and {newlyMatched.name} matched!</h2><p>This is a simulated match for this demo. No real person is notified, and no real person receives messages.</p></div>
+          <div className="rm-match-actions"><button type="button" className="rm-match-start" onClick={() => startChat(newlyMatched)}>Start chat</button><button type="button" className="rm-match-dismiss" onClick={() => setNewlyMatched(null)}>Keep matching</button></div>
+        </section>}
         {!candidate ? <section className="rm-empty"><span aria-hidden="true">🌿</span><h2>You’ve reached the end of this deck.</h2><p>Adjust your filters or review the fictional profiles again.</p><button type="button" onClick={resetDeck}>Restart deck</button></section> :
           <article className={`rm-card${swipeDirection ? ` is-swiping-${swipeDirection}` : ''}`} tabIndex={0} aria-label={`${candidate.name} roommate match. Swipe or use arrow keys to decide.`} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onKeyDown={event => { if (event.key === 'ArrowLeft') swipe('pass'); if (event.key === 'ArrowRight') swipe('like') }}>
             <div className="rm-profile-pane">
@@ -206,6 +381,7 @@ export function RoommateMatching({ currentProfile, profiles = fictionalRoommates
               <button className="rm-like" type="button" onClick={() => swipe('like')}>♡ Like</button>
             </footer>
           </article>}
+        </>}
       </div>
     </section>
   </main>
