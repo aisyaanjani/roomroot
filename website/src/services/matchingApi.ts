@@ -26,9 +26,10 @@ export interface MatchBreakdown {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '')).replace(/\/$/, '')
+export const matchingServiceAvailable = import.meta.env.DEV && Boolean(API_BASE_URL)
 
 async function requestMatch(path: string, seeker: HousingProfile, host: HousingProfile): Promise<MatchResult> {
-  if (!API_BASE_URL) throw new Error('The matching service is not configured for this release.')
+  if (!matchingServiceAvailable) throw new Error('Matching is unavailable in this static release.')
   const url = new URL(API_BASE_URL)
   if (import.meta.env.PROD && url.protocol !== 'https:') throw new Error('The matching service requires HTTPS.')
   const response = await fetch(`${API_BASE_URL}${path}`, {

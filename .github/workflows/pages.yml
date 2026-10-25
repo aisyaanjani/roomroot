@@ -2,8 +2,8 @@ name: Publish RoomRoot demo (manual)
 on:
   workflow_dispatch:
     inputs:
-      approve_backend_traffic_cost_risk:
-        description: 'Cloud Run usage can exceed its free allowance. Separate owner approval obtained?'
+      confirm_api_free_static_release:
+        description: 'Confirm this release disables application API calls and publishes static GitHub Pages assets only?'
         required: true
         type: boolean
         default: false
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: inputs.approve_backend_traffic_cost_risk && github.ref == 'refs/heads/main' && github.event.repository.private == false
+    if: inputs.confirm_api_free_static_release && github.ref == 'refs/heads/main' && github.event.repository.private == false
     runs-on: ubuntu-latest
     environment:
       name: github-pages

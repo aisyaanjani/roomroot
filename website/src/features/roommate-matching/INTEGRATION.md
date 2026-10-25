@@ -2,6 +2,12 @@
 
 `RoommateMatching` is a scoped feature that consumes the Housing Profile questionnaire and the existing RoomRoot matching API. It does not define another questionnaire, profile schema, or scoring engine.
 
+## Static release behavior
+
+The published GitHub Pages release deliberately disables all matching API calls. Compatibility scores, like/save actions, and AI conversation guides are marked unavailable; browsing the explicitly fictional profiles and local filters remains available. Housing profile data continues to be stored in the browser. The release build does not contact Cloud Run or an AI provider.
+
+API-backed matching is available only in development when a matching API base URL is configured. Do not set `VITE_API_BASE_URL` for the static release.
+
 ## Data flow
 
 1. The parent reads a completed `HousingProfileDraft` with the Housing Profile feature's public API.
@@ -59,7 +65,7 @@ cd server
 npm run dev
 ```
 
-The website defaults to `http://localhost:3001`. Set `VITE_API_BASE_URL` for a deployed backend. Never expose `GEMINI_API_KEY` through a Vite variable.
+The website defaults to `http://localhost:3001` during development. Set `VITE_API_BASE_URL` locally only when intentionally testing an API-backed integration. Never expose `GEMINI_API_KEY` through a Vite variable.
 
 ## Demo data
 
