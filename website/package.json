@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test:profile": "tsx --test src/features/housing-profile/tests/*.test.ts",
     "test:matching": "tsx --test src/features/roommate-matching/tests/*.test.ts",
+    "test:rooms": "tsx --test 'src/Room browsing/tests/*.test.ts'",
     "preview": "vite preview"
   },
   "dependencies": {

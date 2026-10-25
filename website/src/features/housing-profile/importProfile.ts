@@ -2,6 +2,7 @@ import { createHousingProfile, sections } from './questions'
 import { isHousingProfileDraft } from './storage'
 import { validateSection } from './validation'
 import type { HousingProfileDraft } from './types'
+import { migrateProfileV1 } from './profileMigration'
 
 export const MAX_PROFILE_IMPORT_BYTES = 1024 * 1024
 export const PROFILE_IMPORT_UNDO_KEY = 'roomroot:housing-profile:import-undo:v1'
@@ -35,10 +36,11 @@ export function migrateHousingProfile(value: unknown): HousingProfileDraft {
   if (version !== 1) {
     throw new ProfileImportError('This profile version is not supported by this version of RoomRoot.')
   }
-  if (!isHousingProfileDraft(value)) {
+  const normalized = migrateProfileV1(value)
+  if (!isHousingProfileDraft(normalized)) {
     throw new ProfileImportError('This file is not a valid RoomRoot housing profile backup.')
   }
-  const migrated = cloneDraft(value)
+  const migrated = cloneDraft(normalized)
   if (migrated.completed) migrated.step = 6
   return migrated
 }
@@ -120,8 +122,9 @@ export function readImportUndoBackup(storage = defaultSessionStorage()): ImportU
     const record = value as Record<string, unknown>
     if (record.version !== 1 || !['fresh', 'profile'].includes(String(record.restore))) throw new Error('invalid')
     if (record.restore === 'fresh' && Object.keys(record).length === 2) return { status: 'available', draft: null }
-    if (record.restore === 'profile' && Object.keys(record).length === 3 && isHousingProfileDraft(record.profile)) {
-      return { status: 'available', draft: cloneDraft(record.profile) }
+    const normalizedProfile = migrateProfileV1(record.profile)
+    if (record.restore === 'profile' && Object.keys(record).length === 3 && isHousingProfileDraft(normalizedProfile)) {
+      return { status: 'available', draft: cloneDraft(normalizedProfile) }
     }
   } catch {
     // Invalid session data is not an undo point.
