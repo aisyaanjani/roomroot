@@ -24,7 +24,7 @@ await send('Page.removeScriptToEvaluateOnNewDocument',{identifier:clearScript.id
 for(let n=0;n<100;n++){if(await evaluate('!!document.querySelector(".housing-profile")'))break;await new Promise(r=>setTimeout(r,100))}await settle()
 await click('Next →')
 assert.match(await evaluate('document.activeElement.textContent'),/Enter your preferred city/)
-await fill('Preferred city *','Boston');await fill('State *','MA')
+await fill('Preferred city *','Boston');await fill('Preferred state *','MA')
 await choose('How will you get around? *','Walking')
 await evaluate('[...document.querySelectorAll("button")].find(b=>b.textContent.startsWith("Driving")).focus()')
 await send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32})
@@ -68,7 +68,7 @@ await click('Save Profile');assert.match(await evaluate('document.querySelector(
 await evaluate('window.exportedBlob=null;window.originalCreateURL=URL.createObjectURL;URL.createObjectURL=blob=>{window.exportedBlob=blob;return window.originalCreateURL(blob)}')
 await click('Export Profile as JSON');const exported=await evaluate('window.exportedBlob.text().then(JSON.parse)');assert.deepEqual(exported,await saved())
 await click('Edit Profile');await fill('Preferred city *','Cambridge');await click('Next →');for(let n=0;n<4;n++)await click('Next →');await click('Review my profile →');assert.match(await evaluate('document.querySelector(".hp-panel").textContent'),/Cambridge/)
-for(const width of [1440,768,390,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<500});await settle();assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'),true,`Overflow at ${width}`)}
+for(const width of [1440,768,375,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:width === 375 ? 812 : 900,deviceScaleFactor:1,mobile:width<500});await settle();assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'),true,`Overflow at ${width}`)}
 await click('Edit Profile');await evaluate('document.activeElement.blur()');await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});assert.equal(await evaluate('document.activeElement.tagName'),'INPUT')
 assert.equal(await evaluate('[...document.querySelectorAll("input")].every(e=>e.getAttribute("aria-label"))'),true)
 await click('Next →');for(let n=0;n<4;n++)await click('Next →');await click('Review my profile →')

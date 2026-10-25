@@ -9,6 +9,7 @@ import NeighborhoodMap from "./components/NeighborhoodMap";
 
 import { sampleListings } from "./data/sampleListings";
 import type { HousingListing } from "./types/listingTypes";
+import { listingMatchesSearch } from "./searchListings";
 
 import "./rmbrowsing.css";
 
@@ -164,15 +165,7 @@ function RoomBrowsing() {
   // Apply search and filters.
   const filteredListings = sampleListings.filter(
     (listing: HousingListing) => {
-      const search = searchTerm.trim().toLowerCase();
-
-      const matchesSearch =
-        listing.title.toLowerCase().includes(search) ||
-        listing.location.toLowerCase().includes(search) ||
-        listing.address.toLowerCase().includes(search) ||
-        listing.city.toLowerCase().includes(search) ||
-        listing.state.toLowerCase().includes(search) ||
-        listing.zipCode.includes(search);
+      const matchesSearch = listingMatchesSearch(listing, searchTerm);
 
       const matchesTransaction =
         !filters.transactionType ||

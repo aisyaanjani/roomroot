@@ -70,13 +70,63 @@
   box-shadow: 0 3px 14px rgba(38, 53, 43, 0.07);
 }
 
+.browse-search-combobox {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
 .search-bar input {
+  width: 100%;
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
   padding: 12px;
   border: none;
   outline: none;
   font-size: 15px;
+}
+
+.browse-search-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  max-height: min(280px, 45vh);
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  background: white;
+  border: 1px solid #cbd7cd;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(38, 53, 43, 0.16);
+}
+
+.browse-search-suggestions li {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.browse-search-suggestions li[aria-selected="true"] {
+  color: white;
+  background: #46634b;
+}
+
+.browse-search-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .search-bar input:focus {
@@ -1228,7 +1278,7 @@
     flex-wrap: wrap;
   }
 
-  .search-bar input {
+  .browse-search-combobox {
     flex-basis: 100%;
   }
 

@@ -44,6 +44,8 @@ A structurally valid draft can still lack required answers or have inconsistent 
 
 The questionnaire exports and imports local JSON backups. Import enforces a 1 MB limit, accepts `.json` files only, parses entirely in the browser, passes data through `migrateHousingProfile`, and requires the strict `isHousingProfileDraft` contract before showing a preview. Nothing is written until the user confirms replacement. Immediately before replacement, the previous valid profile (or a fresh-profile marker) is stored under `roomroot:housing-profile:import-undo:v1` in `sessionStorage`; successful undo clears it. If session storage is unavailable, replacement still works and the UI says that undo is unavailable. TypeScript interfaces alone do not validate runtime input.
 
+Version 1 remains the storage and export version. On load or import, the explicit v1 migration normalizes a recognized state name/code (ignoring case and surrounding whitespace) to its two-letter code and adds an empty `commuteArea` only when that field is absent. It does not replace a valid returning user's state or city. Unknown states remain invalid and are rejected by the strict contract. New profiles default to `VA`. Location suggestions are static, local search aids and never make a network request.
+
 ## Housing search access
 
 Every path below starts at `draft.profile`.
@@ -51,7 +53,7 @@ Every path below starts at `draft.profile`.
 | Input | Path | Meaning |
 | --- | --- | --- |
 | Preferred location | housingBasics.city, state, neighborhoods | City/state and free-text neighborhoods |
-| Campus/work proximity | housingBasics.proximity, commute, transportation | Free-text destination, maximum minutes, transportation choice |
+| Campus/work proximity | housingBasics.proximity, commuteArea, commute, transportation | Optional landmark/custom destination and commute preferences |
 | Monthly rent | housingBasics.minRent, maxRent | Monthly USD rent bounds |
 | Total monthly budget | housingBasics.totalBudget | USD including utilities, distinct from rent |
 | Budget constraints | housingBasics.utilities, budgetFlexible | String selections, not booleans |
@@ -138,6 +140,8 @@ export interface HousingBasics {
   neighborhoods: string
   /** Free-text university or workplace; no coordinates or address lookup. */
   proximity: string
+  /** Optional local commute-area preference; empty means no preference. */
+  commuteArea: string
   commute: number
   transportation: string
   minRent: number

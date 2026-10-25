@@ -6,6 +6,8 @@ export interface HousingBasics {
   neighborhoods: string
   /** Free-text university or workplace; no coordinates or address lookup. */
   proximity: string
+  /** Optional local commute-area preference; does not affect compatibility scoring. */
+  commuteArea: string
   commute: number
   transportation: string
   minRent: number

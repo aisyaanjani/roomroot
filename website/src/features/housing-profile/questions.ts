@@ -29,7 +29,7 @@ export const dealbreakers = ['Smoking indoors','Pets in the home','Frequent over
 export const priorityOptions = ['Affordability','Distance to campus/work','Walkability','Public transportation','Apartment size','Private bathroom','In-unit laundry','Pet-friendly housing','Parking','Natural lighting','Quiet environment','Accessibility','Amenities','Roommate compatibility']
 export function createHousingProfile(): HousingProfileDraft {
   return { version:1, step:0, completed:false, updatedAt:new Date().toISOString(), profile:{
-    housingBasics:{city:'',state:'',neighborhoods:'',proximity:'',commute:30,transportation:'',minRent:500,maxRent:1500,totalBudget:1800,utilities:'',budgetFlexible:'',moveInDate:'',dateFlexible:'',lease:'',otherLease:''},
+    housingBasics:{city:'',state:'VA',neighborhoods:'',proximity:'',commuteArea:'',commute:30,transportation:'',minRent:500,maxRent:1500,totalBudget:1800,utilities:'',budgetFlexible:'',moveInDate:'',dateFlexible:'',lease:'',otherLease:''},
     propertyPreferences:{housingTypes:[],bedrooms:1,bathrooms:1,bedroom:'',bathroom:'',squareFootage:0,furnishing:'',floor:'',elevator:'',roommates:1,entrance:'',outdoor:''},
     amenities:Object.fromEntries(amenities.map(([,name])=>[name,"Don't care"])),
     lifestyle:{sleep:'',cleanliness:'',noise:'',social:'',guests:'',overnight:'',work:'',smoking:'',pets:'',groceries:'',cleaning:'',communication:''},

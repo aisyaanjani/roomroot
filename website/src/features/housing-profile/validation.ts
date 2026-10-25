@@ -1,4 +1,5 @@
 import type { HousingProfileData } from './types'
+import { isStateCode } from './locationData'
 
 export interface ProfileIssue { field: string; message: string }
 export function validateSection(profile: HousingProfileData, section: number): ProfileIssue[] {
@@ -7,7 +8,7 @@ export function validateSection(profile: HousingProfileData, section: number): P
   const b = profile.housingBasics
   if (section === 0) {
     if (!b.city.trim()) add('city', 'Enter your preferred city.')
-    if (!b.state.trim()) add('state', 'Enter your preferred state.')
+    if (!isStateCode(b.state)) add('state', 'Choose a valid U.S. state or Washington, D.C.')
     if (!b.transportation) add('transportation', 'Choose how you prefer to get around.')
     if (b.minRent > b.maxRent) add('minRent', 'Minimum rent must be at or below maximum rent. Adjust either amount.')
     if (b.totalBudget < b.maxRent) add('totalBudget', 'Your total monthly budget must cover your maximum rent, including utilities.')

@@ -30,7 +30,9 @@ test('creates the seeker and host API payload from two questionnaire profiles', 
   const seeker = createHousingProfile().profile
   const host = createHousingProfile().profile
   seeker.housingBasics.city = 'Boston'
+  seeker.housingBasics.state = ''
   host.housingBasics.city = 'Cambridge'
+  host.housingBasics.state = ''
   host.housingBasics.lease = '12 months'
   const request = createMatchingRequest(seeker, host)
   assert.equal(request.seeker.location, 'Boston')

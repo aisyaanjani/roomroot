@@ -1,6 +1,8 @@
 import { compatibility, createHousingProfile, dealbreakers, housingTypes, lifestyleQuestions, priorityOptions } from './questions'
 import { validateSection } from './validation'
 import type { HousingProfileDraft } from './types'
+import { COMMUTE_AREAS, isStateCode } from './locationData'
+import { migrateProfileV1 } from './profileMigration'
 export const HOUSING_PROFILE_STORAGE_KEY = 'roomroot:housing-profile:v1'
 function sameShape(value: unknown, template: unknown): boolean {
   if (typeof template === 'number') return typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -41,7 +43,7 @@ export function isHousingProfileDraft(value: unknown): value is HousingProfileDr
   ]
   const completedSectionsValid = draft.completedSections === undefined || (Array.isArray(draft.completedSections) && draft.completedSections.every(v => Number.isInteger(v) && v >= 0 && v < 6) && new Set(draft.completedSections).size === draft.completedSections.length)
   const completionValid = (!draft.completed && draft.step !== 6) || Array.from({length:6}, (_, index) => validateSection(p, index)).every(issues => issues.length === 0)
-  return completedSectionsValid && completionValid && validDate && selections.every(([value, options]) => !value || options.includes(value)) &&
+  return completedSectionsValid && completionValid && validDate && (b.state === '' || isStateCode(b.state)) && (!b.commuteArea || COMMUTE_AREAS.includes(b.commuteArea as typeof COMMUTE_AREAS[number])) && selections.every(([value, options]) => !value || options.includes(value)) &&
     choices(h.housingTypes, housingTypes) && choices(p.priorities.ranked, priorityOptions) &&
     choices(p.priorities.flexible, priorityOptions) && choices(p.roommatePreferences.dealbreakers, dealbreakers) &&
     lifestyleQuestions.every(q => !p.lifestyle[q.key] || q.options.includes(p.lifestyle[q.key])) &&
@@ -55,7 +57,7 @@ export function isHousingProfileDraft(value: unknown): value is HousingProfileDr
     p.priorities.ranked.length <= 5 && new Set(p.priorities.ranked).size === p.priorities.ranked.length
 }
 export function loadHousingProfile(): HousingProfileDraft | null {
-  try { const raw = localStorage.getItem(HOUSING_PROFILE_STORAGE_KEY); if (!raw) return null; const data: unknown = JSON.parse(raw); return isHousingProfileDraft(data) ? data : null } catch { return null }
+  try { const raw = localStorage.getItem(HOUSING_PROFILE_STORAGE_KEY); if (!raw) return null; const data = migrateProfileV1(JSON.parse(raw)); return isHousingProfileDraft(data) ? data : null } catch { return null }
 }
 export function saveHousingProfile(draft: HousingProfileDraft): boolean {
   try { if (!isHousingProfileDraft(draft)) return false; localStorage.setItem(HOUSING_PROFILE_STORAGE_KEY, JSON.stringify(draft)); return true } catch { return false }
