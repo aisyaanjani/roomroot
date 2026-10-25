@@ -18,7 +18,7 @@ export function SiteNavigation({route}:{route:string}){return <div className="rr
         <div className="nav-wrap">
           <a className="brand" href="#home" aria-label="RoomRoot home"><span className="brand-icon"><Sprout /></span><span>roomroot</span></a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="#browse">Browse Rooms</a>
+            <a href="#rooms" aria-current={route === 'rooms' ? 'page' : undefined}>Browse Rooms</a>
             <a href="#matches" aria-current={route === 'matches' ? 'page' : undefined}>Match</a>
             <a href="#profile" aria-current={route === 'profile' ? 'page' : undefined}>Housing Profile</a>
             <a href="#planner" aria-current={route === 'planner' ? 'page' : undefined}>RootSpace</a>

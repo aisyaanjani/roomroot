@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { HousingProfile, loadHousingProfile, validateSection } from './features/housing-profile'
-import { RoommateMatching } from './features/roommate-matching'
 import { Homepage } from './features/homepage/Homepage'
 import { SiteNavigation } from './features/homepage/SiteNavigation'
+import { RoommateMatching } from './features/roommate-matching'
+import RoomBrowsing from './Room browsing/rmbrowsing'
 import './App.css'
 
 const RoomPlanner = lazy(() => import('./features/room-planner').then(module => ({ default: module.RoomPlanner })))
-const featureRoutes = ['profile', 'matches', 'planner'] as const
+const featureRoutes = ['profile', 'matches', 'planner', 'rooms'] as const
 const readHash = () => window.location.hash.slice(1) || 'home'
 
 function App() {
@@ -35,7 +36,9 @@ function App() {
       {route === 'profile' && <><HousingProfile /><p className="rr-next"><a href="#matches">Continue to roommate matching →</a></p></>}
       {route === 'matches' && (ready && draft ? <RoommateMatching currentProfile={draft.profile} /> : <main className="rr-next"><h1>Your next chapter starts here.</h1><p>Complete your housing profile to explore the fictional roommate demo.</p><a href="#profile">Complete housing profile →</a></main>)}
       {route === 'planner' && <Suspense fallback={<p className="rr-next" role="status">Loading room planner…</p>}><RoomPlanner /></Suspense>}
+      {route === 'rooms' && <RoomBrowsing />}
     </div>
   </>
 }
+
 export default App
