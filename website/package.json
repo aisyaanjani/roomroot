@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:profile": "tsx --test src/features/housing-profile/tests/*.test.ts",
     "test:matching": "tsx --test src/features/roommate-matching/tests/*.test.ts",
     "preview": "vite preview"
   },

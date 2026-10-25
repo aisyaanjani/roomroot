@@ -6,11 +6,23 @@ function sameShape(value: unknown, template: unknown): boolean {
   if (typeof template === 'number') return typeof value === 'number' && Number.isFinite(value) && value >= 0
   if (typeof template === 'string') return typeof value === 'string'
   if (Array.isArray(template)) return Array.isArray(value) && value.every(item => typeof item === 'string')
-  if (template && typeof template === 'object') return !!value && typeof value === 'object' && !Array.isArray(value) && Object.entries(template).every(([key, sample]) => sameShape((value as Record<string, unknown>)[key], sample))
+  if (template && typeof template === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+    const expected = Object.keys(template)
+    const actual = Object.keys(value)
+    return actual.length === expected.length && actual.every(key => expected.includes(key)) &&
+      Object.entries(template).every(([key, sample]) => sameShape((value as Record<string, unknown>)[key], sample))
+  }
   return typeof value === typeof template
 }
 export function isHousingProfileDraft(value: unknown): value is HousingProfileDraft {
-  if (!sameShape(value, createHousingProfile())) return false
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  const template = createHousingProfile()
+  const allowedEnvelopeKeys = new Set([...Object.keys(template), 'completedSections'])
+  if (Object.keys(record).some(key => !allowedEnvelopeKeys.has(key))) return false
+  if (!sameShape(record.profile, template.profile)) return false
+  if (typeof record.version !== 'number' || typeof record.step !== 'number' || typeof record.completed !== 'boolean' || typeof record.updatedAt !== 'string') return false
   const draft = value as HousingProfileDraft
   const p = draft.profile
   const choices = (values: string[], options: string[]) => values.every(v => options.includes(v)) && new Set(values).size === values.length
@@ -34,8 +46,9 @@ export function isHousingProfileDraft(value: unknown): value is HousingProfileDr
     choices(p.priorities.flexible, priorityOptions) && choices(p.roommatePreferences.dealbreakers, dealbreakers) &&
     lifestyleQuestions.every(q => !p.lifestyle[q.key] || q.options.includes(p.lifestyle[q.key])) &&
     Object.keys(p.roommatePreferences.importance).every(key => compatibility.includes(key)) &&
-    draft.version === 1 && Number.isInteger(draft.step) && draft.step <= 6 &&
-    !Number.isNaN(Date.parse(draft.updatedAt)) &&
+    draft.version === 1 && Number.isInteger(draft.step) && draft.step >= 0 && draft.step <= 6 &&
+    (draft.completed || draft.step < 6) &&
+    !Number.isNaN(Date.parse(draft.updatedAt)) && new Date(draft.updatedAt).toISOString() === draft.updatedAt &&
     Object.keys(p.amenities).every(key => key in createHousingProfile().profile.amenities) &&
     Object.values(p.amenities).every(v => ['Must have', 'Nice to have', "Don't care"].includes(v)) &&
     Object.values(p.roommatePreferences.importance).every(v => Number.isInteger(v) && v >= 1 && v <= 5) &&

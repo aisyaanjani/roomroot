@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { amenities, compatibility, createHousingProfile, dealbreakers, headings, housingTypes, lifestyleQuestions, priorityOptions, sections } from './questions'
 import { loadHousingProfile, resetHousingProfile, saveHousingProfile } from './storage'
+import { applyImportedProfile, readImportUndoBackup, restoreProfileBeforeImport } from './importProfile'
+import { ProfileImport } from './ProfileImport'
 import type { AmenityPriority, HousingProfileData, HousingProfileDraft } from './types'
 import { validateSection } from './validation'
 import './HousingProfile.css'
@@ -19,17 +21,23 @@ export function HousingProfile() {
   const [errors, setErrors] = useState<string[]>([])
   const [exited, setExited] = useState(false)
   const [resetPending, setResetPending] = useState(false)
+  const [undoImport, setUndoImport] = useState<'available' | 'none' | 'unavailable'>(() => readImportUndoBackup().status)
   const errorBox = useRef<HTMLDivElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
+  const draftRef = useRef(draft)
   const { profile: p, step } = draft
   const b = p.housingBasics
   const h = p.propertyPreferences
+  useEffect(() => { draftRef.current = draft }, [draft])
   useEffect(() => {
-    const flush = () => { saveHousingProfile(draft) }
     const timer = window.setTimeout(() => setStatus(saveHousingProfile(draft) ? 'Progress saved on this device' : 'Unable to save on this device. Export your profile to keep a copy.'), 0)
-    window.addEventListener('pagehide', flush)
-    return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', flush); flush() }
+    return () => window.clearTimeout(timer)
   }, [draft])
+  useEffect(() => {
+    const flush = () => { saveHousingProfile(draftRef.current) }
+    window.addEventListener('pagehide', flush)
+    return () => { window.removeEventListener('pagehide', flush); flush() }
+  }, [])
   useEffect(() => { title.current?.focus() }, [step, exited])
   function showErrors(issues: string[]) { setErrors(issues); if (issues.length) window.setTimeout(() => errorBox.current?.focus(), 0) }
   const completedSections = (draft.completedSections ?? Array.from({length: step}, (_, index) => index)).filter(index => validateSection(p, index).length === 0)
@@ -54,6 +62,39 @@ export function HousingProfile() {
     const link = document.createElement('a'); link.href=url; link.download='roomroot-housing-profile.json'
     document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
+  function replaceWithImport(imported: HousingProfileDraft) {
+    const result = applyImportedProfile(imported, loadHousingProfile(), saveHousingProfile)
+    if (!result.ok || !result.draft) {
+      setStatus('Unable to save the imported profile in this browser. Your current profile was not changed.')
+      return false
+    }
+    setUndoImport(result.undoStatus ?? 'unavailable')
+    setDraft(result.draft)
+    setExited(false)
+    setResetPending(false)
+    setErrors([])
+    setStatus(result.undoStatus === 'available'
+      ? 'Profile imported and saved on this device. Undo is available for this browser tab session.'
+      : 'Profile imported and saved on this device. Session storage is unavailable, so this import cannot be undone.')
+    window.scrollTo({top:0, behavior:'smooth'})
+    return true
+  }
+  function undoLastImport() {
+    if (undoImport !== 'available') return
+    const result = restoreProfileBeforeImport(saveHousingProfile)
+    if (!result.ok || !result.draft) {
+      setStatus('Unable to restore the previous profile in this browser.')
+      return
+    }
+    setDraft(result.draft)
+    setUndoImport(result.undoStatus === 'unavailable' ? 'unavailable' : 'none')
+    setExited(false)
+    setErrors([])
+    setStatus(result.undoStatus === 'unavailable'
+      ? 'The previous profile was restored, but the session backup could not be cleared because session storage is unavailable.'
+      : 'The previous profile has been restored.')
+    window.scrollTo({top:0, behavior:'smooth'})
+  }
   function fieldProps(key: string, label: string) {
     const issue = errors.length ? validateSection(p, step).find(issue => issue.field === key) : undefined
     return { 'aria-label':label, 'aria-invalid':!!issue, 'aria-describedby':issue ? 'hp-validation-errors' : undefined }
@@ -67,6 +108,8 @@ export function HousingProfile() {
     <div className="hp-main"><div className="hp-progress-label"><span>{step === 6 ? 'Your profile' : `Step ${step+1} of 6`}</span><span>{progress}% complete</span></div><progress max={100} value={progress} aria-label="Questionnaire completion" />
     <ol className="hp-mobile-steps" aria-label="Section completion">{sections.map((name,index)=><li key={name} aria-current={step === index ? 'step' : undefined} data-completed={completedSections.includes(index)}><span aria-hidden="true">{completedSections.includes(index) ? '✓' : index+1}</span><span className="hp-sr">{name}{completedSections.includes(index) ? ', completed' : ''}</span></li>)}</ol>
     <p role="status" className="hp-save-status">{status}</p>
+    {undoImport === 'available' && <p className="hp-undo-import"><button type="button" onClick={undoLastImport}>Undo import</button></p>}
+    {step < 6 && <ProfileImport onReplace={replaceWithImport} />}
     {exited ? <section className="hp-panel"><h1 ref={title} tabIndex={-1}>Take your time. We'll be here.</h1><p>Your progress is kept in this browser when storage is available.</p><button className="hp-primary" onClick={() => setExited(false)}>Resume questionnaire</button></section> : <>
     <h1 ref={title} tabIndex={-1}>{step === 6 ? 'My Housing Profile' : headings[step]}</h1><p className="hp-intro">{step === 6 ? 'A picture of your next home, in your own words.' : 'There’s no one-size-fits-all home. Let’s find what matters to you.'}</p>
     {errors.length > 0 && <div id="hp-validation-errors" ref={errorBox} tabIndex={-1} className="hp-errors" role="alert"><strong>A few things need your attention:</strong><ul>{errors.map(error => <li key={error}>{error}</li>)}</ul></div>}
@@ -84,7 +127,7 @@ export function HousingProfile() {
       {title:'Lifestyle',body:<dl>{lifestyleQuestions.map(q=><div key={q.key}><dt>{q.label}</dt><dd>{p.lifestyle[q.key] || 'Not specified'}</dd></div>)}</dl>},
       {title:'Roommate preferences & dealbreakers',body:<><dl>{compatibility.map(name=><div key={name}><dt>{name}</dt><dd>{p.roommatePreferences.importance[name]} / 5</dd></div>)}</dl><p><strong>Dealbreakers: </strong>{p.roommatePreferences.dealbreakers.join(', ') || 'None selected'}</p></>},
       {title:'Personal priorities',body:<><ol>{p.priorities.ranked.map(name=><li key={name}>{name}</li>)}</ol><p><strong>Flexible: </strong>{p.priorities.flexible.join(', ') || 'None selected'}</p></>},
-    ].map((section,index)=><section className="hp-summary-section" key={section.title}><div className="hp-summary-title"><h2>{section.title}</h2><button onClick={()=>go(index)}>Edit<span className="hp-sr"> {section.title}</span></button></div>{section.body}</section>)}<div className="hp-summary-actions"><button onClick={()=>go(0)}>Edit Profile</button><button className="hp-primary" onClick={()=>{const issues=sections.flatMap((_,index)=>validation(index)); showErrors(issues); if (!issues.length) setStatus(saveHousingProfile(draft) ? 'Profile saved on this device.' : 'Unable to save. Export your profile to keep a copy.')}}>Save Profile</button><button onClick={exportProfile}>Export Profile as JSON</button><button onClick={()=>setResetPending(true)}>Reset Profile</button></div>{resetPending && <div className="hp-errors" role="alert"><p>Delete all answers saved on this device?</p><button onClick={()=>{if(resetHousingProfile()){setDraft(createHousingProfile());setResetPending(false);setErrors([])}else setStatus('Unable to reset storage. Please check your browser settings.')}}>Yes, reset profile</button><button onClick={()=>setResetPending(false)}>Keep my answers</button></div>}</>}
+    ].map((section,index)=><section className="hp-summary-section" key={section.title}><div className="hp-summary-title"><h2>{section.title}</h2><button onClick={()=>go(index)}>Edit<span className="hp-sr"> {section.title}</span></button></div>{section.body}</section>)}<div className="hp-summary-actions"><button onClick={()=>go(0)}>Edit Profile</button><button className="hp-primary" onClick={()=>{const issues=sections.flatMap((_,index)=>validation(index)); showErrors(issues); if (!issues.length) setStatus(saveHousingProfile(draft) ? 'Profile saved on this device.' : 'Unable to save. Export your profile to keep a copy.')}}>Save Profile</button><button onClick={exportProfile}>Export Profile as JSON</button><ProfileImport onReplace={replaceWithImport} /><button onClick={()=>setResetPending(true)}>Reset Profile</button></div>{resetPending && <div className="hp-errors" role="alert"><p>Delete all answers saved on this device?</p><button onClick={()=>{if(resetHousingProfile()){setDraft(createHousingProfile());setResetPending(false);setErrors([])}else setStatus('Unable to reset storage. Please check your browser settings.')}}>Yes, reset profile</button><button onClick={()=>setResetPending(false)}>Keep my answers</button></div>}</>}
     </div>{step < 6 && <footer className="hp-navigation"><button disabled={step === 0} onClick={()=>go(step-1)}>← Back</button><button onClick={()=>{if(saveHousingProfile(draft)){setExited(true);setErrors([])}else setStatus('Unable to save. Export a copy before leaving.')}}>Save & Exit</button><button className="hp-primary" onClick={next}>{step === 5 ? 'Review my profile' : 'Next'} →</button></footer>}
     </>}
     </div></div></main>
