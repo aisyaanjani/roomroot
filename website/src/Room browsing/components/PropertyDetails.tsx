@@ -54,7 +54,7 @@ function PropertyDetails({ listing, onClose }: PropertyDetailsProps) {
   ];
 
   return (
-    <main className="property-details-page">
+    <div className="property-details-page">
       <button className="back-button" onClick={onClose}>
         Back to Listings
       </button>
@@ -233,7 +233,7 @@ function PropertyDetails({ listing, onClose }: PropertyDetailsProps) {
           implemented.
         </span>
       </div>
-    </main>
+    </div>
   );
 }
 

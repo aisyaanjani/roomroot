@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import SearchBar from "./components/SearchBar";
 import FilterSidebar from "./components/FilterSidebar";
@@ -58,6 +58,9 @@ function RoomBrowsing() {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [isComparePanelOpen, setIsComparePanelOpen] = useState(false);
   const [showComparisonTable, setShowComparisonTable] = useState(false);
+  const [keepComparisonTrigger, setKeepComparisonTrigger] = useState(false);
+  const comparisonDialogRef = useRef<HTMLElement>(null);
+  const comparisonTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Neighborhood comparison state
   const [showNeighborhoodComparison, setShowNeighborhoodComparison] =
@@ -97,11 +100,57 @@ function RoomBrowsing() {
     setShowNeighborhoodComparison(false);
   };
 
-  // Close the panel when Escape is pressed.
+  // Keep keyboard focus within the modal and restore it to the opener on close.
   useEffect(() => {
+    if (!isComparePanelOpen) {
+      comparisonTriggerRef.current?.focus();
+      return;
+    }
+
+    const dialog = comparisonDialogRef.current;
+    if (!dialog) return;
+
+    const getFocusableElements = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => element.getClientRects().length > 0);
+
+    getFocusableElements()[0]?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         closeComparePanel();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = getFocusableElements();
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (!firstElement || !lastElement) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const focusIsOutsideDialog = !dialog.contains(document.activeElement);
+
+      if (
+        event.shiftKey &&
+        (document.activeElement === firstElement || focusIsOutsideDialog)
+      ) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === lastElement || focusIsOutsideDialog)
+      ) {
+        event.preventDefault();
+        firstElement.focus();
       }
     };
 
@@ -110,7 +159,7 @@ function RoomBrowsing() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [isComparePanelOpen]);
 
   // Apply search and filters.
   const filteredListings = sampleListings.filter(
@@ -374,11 +423,23 @@ function RoomBrowsing() {
       </div>
 
       {/* Floating comparison button */}
-      {compareIds.length > 0 && (
+      {(compareIds.length > 0 ||
+        isComparePanelOpen ||
+        keepComparisonTrigger) && (
         <button
+          ref={comparisonTriggerRef}
           type="button"
           className="comparison-floating-button"
-          onClick={() => setIsComparePanelOpen(true)}
+          onClick={(event) => {
+            comparisonTriggerRef.current = event.currentTarget;
+            setKeepComparisonTrigger(true);
+            setIsComparePanelOpen(true);
+          }}
+          onBlur={() => {
+            if (!isComparePanelOpen && compareIds.length === 0) {
+              setKeepComparisonTrigger(false);
+            }
+          }}
         >
           Compare Properties ({compareIds.length}/3)
         </button>
@@ -391,10 +452,12 @@ function RoomBrowsing() {
           onClick={closeComparePanel}
         >
           <aside
+            ref={comparisonDialogRef}
             className="comparison-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="comparison-panel-title"
+            tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="comparison-drawer-header">
